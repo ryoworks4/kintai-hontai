@@ -1,0 +1,590 @@
+/**
+ * 勤怠システム — 代表の画面（職員ごとの1か月・登録番号を出す・記録の一覧・端末を止める）
+ *
+ * 読み込みボタンは置かない。開いた時と、ほかのアプリから戻った時に自動で読み込む
+ * （池田建設で「読込ボタン・押してから遅い」が不満になった）。
+ * 1か月の表では、理由の横で認める・認めない、どの欄も直す（NurseAID で楽だった、理由・承認・直しを一続きに）。
+ */
+(function () {
+  if (埋め込まれていたら止める()) return;
+
+  var 読み直しの間隔 = 5000;   // ミリ秒。戻るたびに読みすぎない
+
+  var 鍵 = 取り出す('トークン');
+  var 読んでいる = false;
+  var 最後に読んだ = 0;
+  var 選んでいた職員ID = '';
+
+  // 職員ごとの1か月
+  var 月 = 今日の日付().slice(0, 7);
+  var 月の中身 = null;          // 裏の「1か月の表」の返事
+  var 月を読む番 = 0;           // 読んでいる間に人や月を変えたら、古い返事を使わない
+  var 開いている直し = '';      // 直している日（その行の下に直す欄を出す）
+  var 変えている日 = {};        // 日付 → 認める・認めない を送っている間の判断
+  var 判断し直す日 = {};        // 日付 → 「変える」を押した
+  var 直している = false;
+
+  要素('番号を出す').addEventListener('click', 番号を出す);
+  要素('月の職員').addEventListener('change', function () {
+    しまう('月の職員', 要素('月の職員').value);
+    月を読む();
+  });
+  要素('前の月').addEventListener('click', function () { 月を動かす(-1); });
+  要素('次の月').addEventListener('click', function () { 月を動かす(1); });
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') 戻ってきた();
+  });
+  window.addEventListener('pageshow', function (e) { if (e.persisted) 戻ってきた(); });
+
+  if (鍵) 読み込む(true); else 登録の画面を出す('', 登録できた);
+
+  function 登録できた(応答) {
+    鍵 = 応答.トークン;
+    読み込む(true);
+  }
+
+  function 戻ってきた() {
+    if (!鍵 || Date.now() - 最後に読んだ <= 読み直しの間隔) return;
+    読み込む(false);
+    // 直している途中・送っている途中は、表を読み直さない（入れかけた値が消えないように）
+    if (!開いている直し && !直している && !Object.keys(変えている日).length) 月を読む();
+  }
+
+  /** 初めて = true の時だけ「読み込んでいます」を出す。2回目からは今の表示のまま裏で読み直す */
+  function 読み込む(初めて) {
+    if (読んでいる) return;
+    読んでいる = true;
+    if (初めて) 画面を切り替える('読み込み中');
+    else 要素('読んだ時刻').textContent = '読み込んでいます…';
+    送り直しつきで送る({ 操作: '管理の一覧', トークン: 鍵 }, 一覧の形か).then(function (結果) {
+      読んでいる = false;
+      if (!結果.届いた) {
+        要素('読んだ時刻').textContent = '';
+        知らせる('読み込めませんでした。電波のよい所で、もう一度ためしてください。', {
+          名前: 'もう一度', 押したら: function () { 読み込む(初めて); }
+        });
+        return;
+      }
+      if (!結果.応答.ok) { 断られた(結果.応答); return; }
+      最後に読んだ = Date.now();
+      知らせる(null);
+      描く(結果.応答);
+      画面を切り替える('本体');
+      if (初めて) 月を読む();
+    });
+  }
+
+  function 断られた(応答) {
+    if (応答.コード === '未登録') {
+      鍵 = null;
+      しまう('トークン', null);
+      登録の画面を出す(応答.理由, 登録できた);
+      return;
+    }
+    if (応答.コード === '権限なし') {
+      画面を切り替える('');
+      知らせる('この画面は代表だけが使えます。');
+      要素('職員の画面へ').hidden = false;
+      return;
+    }
+    知らせる(応答.理由);
+  }
+
+  function 描く(中身) {
+    要素('名前').textContent = 中身.自分.名前;
+    要素('読んだ時刻').textContent = 端末の時分(Date.now()) + ' に読み込み';
+
+    // 登録番号を出す相手。選んでいた人は、読み直しても選んだまま
+    var 選ぶ = 要素('職員を選ぶ');
+    選ぶ.textContent = '';
+    中身.職員.forEach(function (人) {
+      var o = 作る('option', { value: 人.職員ID, text: 人.名前 + (人.役割 === '管理者' ? '（代表）' : '') });
+      if (人.職員ID === 選んでいた職員ID) o.selected = true;
+      選ぶ.appendChild(o);
+    });
+
+    // 1か月の表を見る人。前に見ていた人を覚えておく（いなければ、代表でない最初の人）
+    var 月の選ぶ = 要素('月の職員');
+    var 見ていた = 月の選ぶ.value || 取り出す('月の職員') || '';
+    var 見る人 = 中身.職員.filter(function (人) { return 人.職員ID === 見ていた; })[0] ||
+        中身.職員.filter(function (人) { return 人.役割 !== '管理者'; })[0] || 中身.職員[0];
+    月の選ぶ.textContent = '';
+    中身.職員.forEach(function (人) {
+      var o = 作る('option', { value: 人.職員ID, text: 人.名前 + (人.役割 === '管理者' ? '（代表）' : '') });
+      if (見る人 && 人.職員ID === 見る人.職員ID) o.selected = true;
+      月の選ぶ.appendChild(o);
+    });
+
+    var 表 = 要素('記録');
+    表.textContent = '';
+    中身.記録.forEach(function (r) {
+      表.appendChild(作る('tr', {}, [
+        作る('td', { class: 'mono', text: 月日(r.時刻) + ' ' + 時分(r.時刻) }),
+        作る('td', { text: r.名前 }),
+        作る('td', {}, [作る('span', { class: 'tag ' + (r.種類 === '出勤' ? 'in' : 'out'), text: r.種類 })])
+      ]));
+    });
+    if (!中身.記録.length) 表.appendChild(作る('tr', {}, [作る('td', { colspan: '3', class: 'muted', text: 'まだ記録はありません' })]));
+
+    // 端末は表にしない。スマホ幅で「止めますか？」を出しても横にはみ出さないように、1台1行で折り返す
+    var 端末一覧 = 要素('端末');
+    端末一覧.textContent = '';
+    中身.端末.forEach(function (t) {
+      var 操作 = 作る('div', { class: 'act' });
+      if (t.自分) 操作.appendChild(作る('span', { class: 'muted small', text: 'この端末' }));
+      else 止めるボタンを置く(操作, t);
+      端末一覧.appendChild(作る('div', { class: 'device' }, [
+        作る('div', {}, [
+          作る('div', { class: 'who', text: t.名前 }),
+          作る('div', { class: 'muted small', text: t.端末名 + '・' + 月日(t.登録日時) + ' に登録' })
+        ]),
+        操作
+      ]));
+    });
+  }
+
+  /** 止める → その場で「止めますか？」を出してから送る */
+  function 止めるボタンを置く(枠, t) {
+    枠.textContent = '';
+    var b = 作る('button', { type: 'button', class: 'btn ghost small', text: '止める' });
+    b.addEventListener('click', function () {
+      枠.textContent = '';
+      var はい = 作る('button', { type: 'button', class: 'btn danger small', text: '止める' });
+      var いいえ = 作る('button', { type: 'button', class: 'btn ghost small', text: 'やめる' });
+      いいえ.addEventListener('click', function () { 止めるボタンを置く(枠, t); });
+      はい.addEventListener('click', function () { 止める(枠, t); });
+      枠.appendChild(作る('span', { class: 'ask', text: '止めますか？' }));
+      枠.appendChild(はい);
+      枠.appendChild(いいえ);
+    });
+    枠.appendChild(b);
+  }
+
+  /** 一覧の中身の形を、1件ずつ確かめる（欠けた記録を描いて画面が崩れたり、別の返事を一覧と取り違えたりしない） */
+  function 一覧の形か(r) {
+    var 文字 = function (o, キー) { return キー.every(function (k) { return typeof o[k] === 'string'; }); };
+    return !!r.自分 && typeof r.自分.名前 === 'string' &&
+        Array.isArray(r.職員) && r.職員.every(function (p) { return 文字(p, ['職員ID', '名前', '役割']); }) &&
+        Array.isArray(r.端末) && r.端末.every(function (t) {
+          return 文字(t, ['端末ID', '職員ID', '名前', '端末名', '登録日時']) && typeof t.自分 === 'boolean';
+        }) &&
+        Array.isArray(r.記録) && r.記録.every(function (k) { return 文字(k, ['記録ID', '名前', '種類', '時刻']); });
+  }
+
+  function 止める(枠, t) {
+    枠.textContent = '止めています…';
+    送り直しつきで送る({ 操作: '失効', トークン: 鍵, 端末ID: t.端末ID }, function (r) {
+      return r.端末ID === t.端末ID;
+    }).then(function (結果) {
+      if (!結果.届いた) {
+        止めるボタンを置く(枠, t);
+        知らせる('止められたか分かりませんでした。もう一度ためしてください。');
+        return;
+      }
+      if (!結果.応答.ok) { 止めるボタンを置く(枠, t); 断られた(結果.応答); return; }
+      枠.textContent = '止めました';
+      読み込む(false);
+    });
+  }
+
+  // ── 職員ごとの1か月 ─────────────────────────────────────
+
+  function 月を動かす(n) {
+    var m = /^(\d{4})-(\d\d)$/.exec(月);
+    月 = new Date(Date.UTC(+m[1], +m[2] - 1 + n, 1)).toISOString().slice(0, 7);
+    月を読む();
+  }
+
+  function 月を読む() {
+    var 職員ID = 要素('月の職員').value, 見る月 = 月, 番 = ++月を読む番;
+    var m = /^(\d{4})-(\d\d)$/.exec(月);
+    要素('月の表示').textContent = m[1] + '年' + Number(m[2]) + '月';
+    if (!職員ID || !鍵) return;
+    開いている直し = '';
+    要素('月の状態').textContent = '読み込んでいます…';
+    送り直しつきで送る({ 操作: '1か月の表', トークン: 鍵, 職員ID: 職員ID, 月: 見る月 }, function (r) {
+      return !!r.職員 && r.職員.職員ID === 職員ID && typeof r.職員.名前 === 'string' && r.月 === 見る月 &&
+          Array.isArray(r.日) && r.日.length >= 28 &&
+          r.日.every(function (d) { return 日の形か(d, true) && d.日付.slice(0, 7) === 見る月; }) &&
+          合計の形か(r.合計) && Array.isArray(r.直した記録) && r.直した記録.every(直しの形か);
+    }).then(function (結果) {
+      if (番 !== 月を読む番) return;
+      if (!結果.届いた) {
+        要素('月の状態').textContent = '読み込めませんでした。少し待ってから、人か月を選び直してください。';
+        return;
+      }
+      if (!結果.応答.ok) { 要素('月の状態').textContent = ''; 断られた(結果.応答); return; }
+      月の中身 = 結果.応答;
+      変えている日 = {};
+      判断し直す日 = {};
+      要素('月の状態').textContent = '';
+      月を描く();
+    });
+  }
+
+  function 合計の形か(g) {
+    return !!g && ['働いた分', '差分', '給与へ分', '確認待ち', '夜の回数'].every(function (k) { return typeof g[k] === 'number'; });
+  }
+
+  function 直しの形か(r) {
+    return !!r && ['直しID', '日付', '欄', '元の値', '新しい値', '理由', '日時', '直した人'].every(function (k) {
+      return typeof r[k] === 'string';
+    });
+  }
+
+  /** 裏と同じ足し方（1日を置き換えた時に、読み直さずに合計を出す） */
+  function 合計を出す(日) {
+    var g = { 働いた分: 0, 差分: 0, 給与へ分: 0, 確認待ち: 0, 夜の回数: 0 };
+    日.forEach(function (d) {
+      if (d.働いた分 !== null) g.働いた分 += d.働いた分;
+      if (d.差分 !== null && d.差分 > 0) g.差分 += d.差分;
+      g.給与へ分 += d.給与へ分;
+      if (d.確認 === '確認待ち') g.確認待ち++;
+      g.夜の回数 += d.夜.filter(function (n) { return !n.数えない; }).length;
+    });
+    return g;
+  }
+
+  function 日を置き換える(新しい日) {
+    if (!月の中身) return;
+    月の中身.日 = 月の中身.日.map(function (d) { return d.日付 === 新しい日.日付 ? 新しい日 : d; });
+    月の中身.合計 = 合計を出す(月の中身.日);
+  }
+
+  function 月を描く() {
+    var 中身 = 月の中身;
+    if (!中身) return;
+    var g = 中身.合計;
+    var 合計 = 要素('合計');
+    合計.textContent = '';
+    [['働いた', 時間の表示(g.働いた分)], ['予定との差', 時間の表示(g.差分)], ['給与へ（認めた残業）', 時間の表示(g.給与へ分)],
+     ['確認待ち', g.確認待ち + '日'], ['夜の呼び出し', g.夜の回数 + '回']].forEach(function (x, i) {
+      合計.appendChild(作る('div', { class: 'sum' + (i === 3 && g.確認待ち ? ' wait' : '') }, [
+        作る('span', { class: 'muted small', text: x[0] }), 作る('b', { class: 'mono', text: x[1] })
+      ]));
+    });
+
+    var 表 = 要素('月の表');
+    表.textContent = '';
+    中身.日.forEach(function (d) {
+      表.appendChild(行を作る(d));
+      if (開いている直し === d.日付) 表.appendChild(直す行を作る(d));
+    });
+
+    var 一覧 = 要素('直した記録');
+    一覧.textContent = '';
+    中身.直した記録.slice().reverse().forEach(function (r) {
+      一覧.appendChild(作る('li', { class: 'li fix' }, [
+        作る('span', { class: 'd', text: 月日(r.日付 + ' 00:00') }),
+        作る('span', { text: 欄の名前(r.欄) + ' ' + (値の表示(r.欄, r.元の値, r.日付) || 'なし') + ' → ' +
+            (値の表示(r.欄, r.新しい値, r.日付) || 'なし') + (r.理由 ? '「' + r.理由 + '」' : '') }),
+        作る('span', { class: 'muted small', text: r.直した人 + '・' + 月日(r.日時) })
+      ]));
+    });
+    if (!中身.直した記録.length) 一覧.appendChild(作る('li', { class: 'li empty', text: 'この月に直した所はありません' }));
+  }
+
+  function 欄の名前(欄) {
+    var m = /^(出発|帰着):/.exec(欄);
+    return m ? '夜の' + m[1] : 欄;
+  }
+
+  function 値の表示(欄, 値, 日付) {
+    if (欄 === '休憩') return 値 === '' ? '' : 値 + '分';
+    if (欄 === '理由') return 値;
+    return その日の時分(値, 日付);
+  }
+
+  function 直したか(d, 欄) { return d.直した欄.indexOf(欄) >= 0; }
+
+  /** 中身の文字。直した欄は緑にする */
+  function 字(文, 直した, 追加) {
+    return 作る('span', { class: (直した ? 'edited' : '') + (追加 ? ' ' + 追加 : ''), text: 文 });
+  }
+
+  function 行を作る(d) {
+    var 記録あり = !!(d.出勤 || d.退勤 || d.夜.length);
+    var tr = 作る('tr', { class: d.確認 === '確認待ち' ? 'wait' : (記録あり ? '' : 'empty') });
+
+    tr.appendChild(作る('td', { text: 日付の表示(d.日付) }));
+
+    var 時刻 = 作る('td', { class: 'mono' });
+    if (d.出勤 || d.退勤) {
+      時刻.appendChild(字(d.出勤 ? その日の時分(d.出勤, d.日付) : '出勤なし', 直したか(d, '出勤'), d.出勤 ? '' : 'missing'));
+      時刻.appendChild(document.createTextNode('〜'));
+      時刻.appendChild(字(d.退勤 ? その日の時分(d.退勤, d.日付) : '退勤なし', 直したか(d, '退勤'), d.退勤 ? '' : 'missing'));
+    }
+    tr.appendChild(時刻);
+
+    // 休憩は、出勤か退勤のある日だけ（夜の呼び出しだけの日には出さない）
+    tr.appendChild(作る('td', { class: 'num' }, d.出勤 || d.退勤 ? [字(d.休憩分 + '分', 直したか(d, '休憩'))] : []));
+    tr.appendChild(作る('td', { class: 'num', text: d.働いた分 === null ? '' : 時間の表示(d.働いた分) }));
+
+    var 差 = 作る('td');
+    if (d.差分 !== null) {
+      差.appendChild(作る('b', { class: 'mono' + (d.理由が要る ? ' diff' : ' muted'), text: 差の表示(d.差分) }));
+      if (d.理由が要る) 差.appendChild(字(' ' + (d.理由 || '理由なし'), 直したか(d, '理由'), d.理由 ? '' : 'muted'));
+    }
+    tr.appendChild(差);
+
+    tr.appendChild(作る('td', {}, [残業の欄(d)]));
+
+    var 夜 = 作る('td', { class: 'mono' + (d.夜.length ? ' night' : '') });
+    d.夜.forEach(function (n, i) {
+      if (i) 夜.appendChild(作る('br'));
+      var 文 = n.数えない ? '数えない' : その日の時分(n.出発, d.日付) + '→' + (n.帰着 ? その日の時分(n.帰着, d.日付) : '帰着なし');
+      夜.appendChild(字(文, 直したか(d, '出発:' + n.出発ID) || 直したか(d, '帰着:' + n.出発ID), n.数えない ? 'muted' : ''));
+    });
+    tr.appendChild(夜);
+
+    var 直す = 作る('button', { type: 'button', class: 'btn ghost small', text: 開いている直し === d.日付 ? '閉じる' : '直す' });
+    直す.disabled = 直している;
+    直す.addEventListener('click', function () {
+      開いている直し = 開いている直し === d.日付 ? '' : d.日付;
+      月を描く();
+    });
+    tr.appendChild(作る('td', {}, [直す]));
+    return tr;
+  }
+
+  /** 残業の欄。確認待ちは、理由の横でその場で認める・認めない */
+  function 残業の欄(d) {
+    var 枠 = 作る('div', { class: 'acts' });
+    if (!d.理由が要る) return 枠;
+    if (変えている日[d.日付]) {
+      枠.appendChild(作る('span', { class: 'muted small', text: (変えている日[d.日付] === '認める' ? '認めています…' : '送っています…') }));
+      return 枠;
+    }
+    if (d.確認 === '確認待ち' || 判断し直す日[d.日付]) {
+      ['認める', '認めない'].forEach(function (判断) {
+        var b = 作る('button', { type: 'button', class: 'btn small' + (判断 === '認めない' ? ' ghost' : ''), text: 判断 });
+        b.addEventListener('click', function () { 判断する(d, 判断); });
+        枠.appendChild(b);
+      });
+      return 枠;
+    }
+    枠.appendChild(作る('span', {
+      class: 'pill ' + (d.確認 === '認めた' ? 'ok' : 'no'),
+      text: d.確認 === '認めた' ? '認めた ' + 時間の表示(d.給与へ分) : '認めない（残す）'
+    }));
+    var 変える = 作る('button', { type: 'button', class: 'btn ghost small', text: '変える' });
+    変える.addEventListener('click', function () { 判断し直す日[d.日付] = true; 月を描く(); });
+    枠.appendChild(変える);
+    return 枠;
+  }
+
+  /**
+   * 押した瞬間に「認めています…」にして送る。送るのは見ていた差。ほかの画面で直されて差が変わっていたら、
+   * 裏が断るので表を読み直す。届いたか分からない時も、表を読み直して今の状態を見せる（送り直しても二重にならない）
+   */
+  function 判断する(d, 判断) {
+    var 中身 = 月の中身, 職員ID = 中身.職員.職員ID;
+    変えている日[d.日付] = 判断;
+    月を描く();
+    送り直しつきで送る({
+      操作: '残業の確認', トークン: 鍵, 操作ID: 新しい操作ID(), 職員ID: 職員ID, 日付: d.日付, 判断: 判断, 差分: d.差分
+    }, function (r) {
+      return !!r.確認 && r.確認.日付 === d.日付 && r.確認.判断 === 判断 && 日の形か(r.日, true) && r.日.日付 === d.日付;
+    }).then(function (結果) {
+      if (月の中身 !== 中身) return;   // 待っている間に、人か月を変えて読み直した
+      delete 変えている日[d.日付];
+      delete 判断し直す日[d.日付];
+      if (!結果.届いた) {
+        知らせる('送れたか分かりませんでした。表を読み直します。');
+        月を読む();
+        return;
+      }
+      if (!結果.応答.ok) { 断られた(結果.応答); 月を読む(); return; }
+      日を置き換える(結果.応答.日);
+      月を描く();
+    });
+  }
+
+  // ── 直す ──────────────────────────────────────────
+
+  /** 1日分の直す欄。時刻を消すと「なし」。日付は、翌日のしるしと夜の時刻から決める */
+  function 直す行を作る(d) {
+    var 欄たち = [];   // { 欄, 元の値, 新しい値を出す() }
+    var 用紙 = 作る('form', { class: 'fix-form', novalidate: '' });
+    var 入れ物 = 作る('div', { class: 'fix-grid' });
+    var id = function (名) { return '直す-' + d.日付 + '-' + 名; };
+    var 時刻の欄 = function (名, 値) {
+      return 作る('input', { id: id(名), type: 'time', class: 'input', value: 値 ? 値.slice(11, 16) : '' });
+    };
+    var 置く = function (ラベル, 名, 中身) {
+      入れ物.appendChild(作る('label', { for: id(名), class: 'field' }, [作る('span', { text: ラベル })].concat(中身)));
+    };
+
+    var 出勤 = 時刻の欄('出勤', d.出勤);
+    置く('出勤', '出勤', [出勤]);
+    欄たち.push({ 欄: '出勤', 元の値: d.出勤, 新しい値を出す: function () { return 出勤.value ? d.日付 + ' ' + 出勤.value : ''; } });
+
+    var 退勤 = 時刻の欄('退勤', d.退勤);
+    var 翌日 = 作る('input', { id: id('翌日'), type: 'checkbox', 'aria-label': '退勤が0時を過ぎた（翌日の時刻）' });
+    翌日.checked = !!d.退勤 && d.退勤.slice(0, 10) !== d.日付;
+    置く('退勤', '退勤', [作る('div', { class: 'stack' }, [退勤, 作る('span', { class: 'check small' }, [翌日, '0時を過ぎた（翌日の時刻）'])])]);
+    欄たち.push({ 欄: '退勤', 元の値: d.退勤, 新しい値を出す: function () {
+      return 退勤.value ? (翌日.checked ? 日を足す(d.日付, 1) : d.日付) + ' ' + 退勤.value : '';
+    } });
+
+    var 休憩 = 作る('input', { id: id('休憩'), type: 'number', class: 'input', min: '0', max: '600', step: '5', inputmode: 'numeric', value: String(d.休憩分) });
+    置く('休憩（分）', '休憩', [休憩]);
+    欄たち.push({ 欄: '休憩', 元の値: String(d.休憩分), 新しい値を出す: function () { return 休憩.value.trim(); } });
+
+    var 理由 = 作る('select', { id: id('理由'), class: 'input' });
+    [''].concat(理由の選択肢一覧()).forEach(function (s) {
+      var o = 作る('option', { value: s, text: s || 'なし' });
+      if (s === d.理由) o.selected = true;
+      理由.appendChild(o);
+    });
+    置く('理由', '理由', [理由]);
+    欄たち.push({ 欄: '理由', 元の値: d.理由, 新しい値を出す: function () { return 理由.value; } });
+
+    d.夜.forEach(function (n, i) {
+      var 出発 = 時刻の欄('出発' + i, n.出発), 帰着 = 時刻の欄('帰着' + i, n.帰着);
+      // 出発は 0:00〜9:00 なら次の日。帰着は出発の時刻より前なら、出発の次の日
+      var 出発の値 = function () {
+        if (!出発.value) return '';
+        return (出発.value < '09:00' ? 日を足す(d.日付, 1) : d.日付) + ' ' + 出発.value;
+      };
+      置く('夜の出発' + (d.夜.length > 1 ? (i + 1) : ''), '出発' + i, [出発]);
+      置く('夜の帰着' + (d.夜.length > 1 ? (i + 1) : ''), '帰着' + i, [帰着]);
+      欄たち.push({ 欄: '出発:' + n.出発ID, 元の値: n.出発, 新しい値を出す: 出発の値 });
+      欄たち.push({ 欄: '帰着:' + n.出発ID, 元の値: n.帰着, 新しい値を出す: function () {
+        var 発 = 出発の値() || n.出発;
+        if (!帰着.value || !発) return '';
+        return (帰着.value <= 発.slice(11, 16) ? 日を足す(発.slice(0, 10), 1) : 発.slice(0, 10)) + ' ' + 帰着.value;
+      } });
+    });
+
+    var なぜ = 作る('input', { id: id('なぜ'), type: 'text', class: 'input', maxlength: '100', placeholder: '例: 押し忘れ' });
+    置く('なぜ直すか（残ります）', 'なぜ', [なぜ]);
+
+    var 返事 = 作る('p', { class: 'reply', role: 'status' });
+    var 送る = 作る('button', { type: 'submit', class: 'btn', text: '直す' });
+    var やめる = 作る('button', { type: 'button', class: 'btn ghost', text: 'やめる' });
+    やめる.addEventListener('click', function () { 開いている直し = ''; 月を描く(); });
+    用紙.appendChild(入れ物);
+    用紙.appendChild(作る('p', { class: 'muted small', text: '時刻を消すと「なし」になります。夜の呼び出しの出発を消すと、その呼び出しは数えません。押した時刻の記録は消えずに残ります。' }));
+    用紙.appendChild(作る('div', { class: 'acts' }, [送る, やめる]));
+    用紙.appendChild(返事);
+
+    用紙.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var 変更 = 欄たち.map(function (f) { return { 欄: f.欄, 元の値: f.元の値, 新しい値: f.新しい値を出す() }; })
+          .filter(function (c) { return c.新しい値 !== c.元の値; });
+      if (!変更.length) { 返事.textContent = '変えた所がありません。'; return; }
+      直す順に並べる(変更);
+      送る.disabled = true;
+      やめる.disabled = true;
+      直している = true;
+      返事.textContent = '直しています…';
+      直しを送る(d, 変更, なぜ.value, 返事, function () {
+        送る.disabled = false;
+        やめる.disabled = false;
+      });
+    });
+
+    return 作る('tr', { class: 'fix-row' }, [作る('td', { colspan: '8' }, [用紙])]);
+  }
+
+  function 理由の選択肢一覧() {
+    // 裏の選択肢（D で決定）。1か月の表の返事には入っていないので、ここに同じものを持つ
+    return ['記録・申し送り', '訪問が長引いた', '急な対応', '会議・委員会', '勉強（自己研鑽）', '私用', '押すのが遅れただけ'];
+  }
+
+  /**
+   * 出勤と退勤（出発と帰着）を両方動かす時、裏は1欄ずつ前後を確かめるので、送る順を決める：
+   * 遅らせる時は後ろ（退勤）から、早める時は前（出勤）から
+   */
+  function 直す順に並べる(変更) {
+    var 位置 = function (欄) { return 変更.map(function (c) { return c.欄; }).indexOf(欄); };
+    var 入れ替える = function (前の欄, 後の欄) {
+      var i = 位置(前の欄), j = 位置(後の欄);
+      if (i < 0 || j < 0) return;
+      var 前 = 変更[i];
+      var 遅らせる = 前.元の値 && 前.新しい値 && 前.新しい値 > 前.元の値;
+      if ((遅らせる && i < j) || (!遅らせる && i > j)) { 変更[i] = 変更[j]; 変更[j] = 前; }
+    };
+    入れ替える('出勤', '退勤');
+    変更.filter(function (c) { return /^出発:/.test(c.欄); }).forEach(function (c) {
+      入れ替える(c.欄, '帰着:' + c.欄.slice(3));
+    });
+  }
+
+  /** 1欄ずつ順に送る（1欄に1つの操作ID）。どこかで断られたら止めて、表を読み直す */
+  function 直しを送る(d, 変更, なぜ, 返事, 終わったら) {
+    var 中身 = 月の中身, 職員ID = 中身.職員.職員ID, i = 0;
+    (function 次() {
+      if (月の中身 !== 中身) { 直している = false; return; }
+      if (i >= 変更.length) {
+        直している = false;
+        知らせる(null);
+        月を読む();   // 合計と直した記録をそろえる
+        return;
+      }
+      var c = 変更[i];
+      送り直しつきで送る({
+        操作: '直す', トークン: 鍵, 操作ID: 新しい操作ID(), 職員ID: 職員ID, 日付: d.日付,
+        欄: c.欄, 元の値: c.元の値, 新しい値: c.新しい値, 理由: なぜ
+      }, function (r) {
+        return 日の形か(r.日, true) && r.日.日付 === d.日付 && (r.変わらない === true || 直しの形か(Object.assign({ 直した人: '' }, r.直し)));
+      }).then(function (結果) {
+        if (月の中身 !== 中身) { 直している = false; return; }
+        if (!結果.届いた) {
+          直している = false;
+          終わったら();
+          返事.textContent = '直せたか分かりませんでした。表を読み直します。';
+          月を読む();
+          return;
+        }
+        if (!結果.応答.ok) {
+          直している = false;
+          終わったら();
+          if (結果.応答.コード === '入力') {
+            // 1欄も直していなければ、入れた値のまま直せるように欄を開いておく。途中までなら、表を読み直して見せる
+            if (!i) { 返事.textContent = 欄の名前(c.欄) + 'の時刻の前後が合いません。まだ何も直していません。'; return; }
+            知らせる(欄の名前(c.欄) + 'の時刻の前後が合わないため、その前の欄まで直しました。');
+            月を読む();
+            return;
+          }
+          断られた(結果.応答);
+          月を読む();
+          return;
+        }
+        日を置き換える(結果.応答.日);
+        i++;
+        次();
+      });
+    })();
+  }
+
+  function 番号を出す() {
+    var 職員ID = 要素('職員を選ぶ').value;
+    var ボタン = 要素('番号を出す');
+    var 箱 = 要素('番号の箱');
+    if (!職員ID) return;
+    選んでいた職員ID = 職員ID;
+    ボタン.disabled = true;
+    箱.hidden = false;
+    要素('番号').textContent = '······';
+    要素('番号の説明').textContent = '番号を出しています…';
+    // 押すたびに操作IDを1つ付ける。送り直しも、遅れて届いた元の依頼も、裏は同じ番号を返す
+    送り直しつきで送る({ 操作: '番号を出す', トークン: 鍵, 職員ID: 職員ID, 操作ID: 新しい操作ID() }, function (r) {
+      return /^\d{6}$/.test(r.番号) && typeof r.期限 === 'string' && typeof r.名前 === 'string' && r.職員ID === 職員ID;
+    }).then(function (結果) {
+      ボタン.disabled = false;
+      if (!結果.届いた) {
+        箱.hidden = true;
+        知らせる('番号を出せませんでした。もう一度押してください。');
+        return;
+      }
+      if (!結果.応答.ok) { 箱.hidden = true; 断られた(結果.応答); return; }
+      // 待っている間に別の人を選び直していたら、取り違えないよう番号は出さない（もう一度押してもらう）
+      if (要素('職員を選ぶ').value !== 職員ID) { 箱.hidden = true; return; }
+      要素('番号').textContent = 結果.応答.番号.slice(0, 3) + ' ' + 結果.応答.番号.slice(3);
+      要素('番号の説明').textContent = 結果.応答.名前 + ' さんの番号です。' + 時分(結果.応答.期限) +
+          ' まで、1回だけ使えます。新しく出すと、この番号は使えなくなります。';
+    });
+  }
+})();
