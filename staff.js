@@ -41,6 +41,12 @@
   var 勤務表を読む番 = 0;
   var 勤務表を読んでいる = false;
   var 勤務表を見た = 取り出す('勤務表を見た') || {};   // 月 → 見た時の、いちばん新しい「変わった日時」
+  // 段階3：申請（休みの希望・押し忘れ）。1→5 の順に聞いて、送る前に確認
+  var 申請の中身 = null;        // 裏の「自分の申請」の返事
+  var 申請を読んでいる = false;
+  var 申請を送っている = false;
+  var 取り下げている = '';       // 送っている申請ID
+  var 下書きの申請 = 新しい下書き();
 
   要素('今日').textContent = 今日の表示();
   // 下のタブ4つ（今日・勤務表・申請・記録）。申請は段階3まで押せない。前に見ていたタブを覚えておく
@@ -48,8 +54,7 @@
   タブの名前.forEach(function (名) {
     要素('タブ-' + 名).addEventListener('click', function () { タブを選ぶ(名); });
   });
-  要素('タブ-申請').disabled = true;
-  タブを選ぶ(取り出す('タブ') === '勤務表' || 取り出す('タブ') === '記録' ? 取り出す('タブ') : '今日');
+  タブを選ぶ(タブの名前.indexOf(取り出す('タブ')) > 0 ? 取り出す('タブ') : '今日');
   要素('勤務表の前の月').addEventListener('click', function () { 勤務表を動かす(-1); });
   要素('勤務表の次の月').addEventListener('click', function () { 勤務表を動かす(1); });
   打刻の種類.forEach(function (種類) {
@@ -110,6 +115,7 @@
       描く();
       if (初めて && 待ち) 待ちを片づける();
       if (初めて && !要素('面-勤務表').hidden && !勤務表の中身 && !勤務表を読んでいる) 勤務表を読む();
+      if (初めて && !要素('面-申請').hidden && !申請の中身 && !申請を読んでいる) 申請を読む();
     });
   }
 
@@ -124,6 +130,7 @@
     });
     しまう('タブ', 名);
     if (名 === '勤務表' && 鍵 && !勤務表を読んでいる) 勤務表を読む();
+    if (名 === '申請' && 鍵 && !申請を読んでいる) 申請を読む();
   }
 
   function 勤務表を動かす(n) {
@@ -153,6 +160,164 @@
       if (!結果.応答.ok) { 要素('勤務表の状態').textContent = ''; 断られた(結果.応答, false); return; }
       勤務表の中身 = 結果.応答;
       勤務表を描く();
+    });
+  }
+
+  // ── 段階3：申請 ──────────────────────────────────────────
+
+  function 新しい下書き() { return { 種類: '', 日付: '', 内容: '', 時刻: '', 翌日: false, 理由: '' }; }
+
+  function 申請を読む() {
+    if (!鍵) return;
+    申請を読んでいる = true;
+    要素('申請の状態').textContent = '読み込んでいます…';
+    送り直しつきで送る({ 操作: '自分の申請', トークン: 鍵 }, function (r) {
+      var 文字 = function (o, キー) { return !!o && キー.every(function (k) { return typeof o[k] === 'string'; }); };
+      return /^\d{4}-\d\d-\d\d$/.test(r.今日) && !!r.決まり && typeof r.決まり.押し忘れを申請できる日数 === 'number' &&
+          Array.isArray(r.申請) && r.申請.every(function (x) {
+            return 文字(x, ['申請ID', '種類', '日付', '内容', '時刻', '理由', '日時', '状態', '一言']) && ['確認待ち', '認める', '認めない', '取り下げ'].indexOf(x.状態) >= 0;
+          });
+    }).then(function (結果) {
+      申請を読んでいる = false;
+      if (!結果.届いた) { 要素('申請の状態').textContent = '読み込めませんでした。電波のよい所で、タブを押し直してください。'; 申請を描く(); return; }
+      if (!結果.応答.ok) { 要素('申請の状態').textContent = ''; 断られた(結果.応答, false); return; }
+      申請の中身 = 結果.応答;
+      申請を描く();
+    });
+  }
+
+  function 申請の文(x) {
+    if (x.種類 === '休み') return '休みの希望（' + x.内容 + '）';
+    return '押し忘れ ' + x.内容 + ' ' + その日の時分(x.時刻, x.日付);
+  }
+
+  function 申請を描く() {
+    手順を描く();
+    var 一覧 = 要素('申請の一覧');
+    一覧.textContent = '';
+    if (!申請の中身) return;
+    要素('申請の状態').textContent = 申請の中身.申請.length ? '' : 'まだ申請はありません。';
+    申請の中身.申請.forEach(function (x) {
+      var 何 = 作る('span', { class: 'what' }, [
+        作る('span', { text: 日付の表示(x.日付) + ' ' + 申請の文(x) }),
+        作る('small', { text: 月日(x.日時) + ' に送った' + (x.理由 ? '・理由：' + x.理由 : '') + (x.一言 ? '　代表：' + x.一言 : '') })
+      ]);
+      var 側 = 作る('span', { class: 'side' });
+      var 札 = { 確認待ち: ['pill wait', '確認待ち'], 認める: ['pill ok', '認めた'], 認めない: ['pill no', '認めない'], 取り下げ: ['pill no', '取り下げた'] }[x.状態];
+      側.appendChild(作る('span', { class: 札[0], text: 札[1] }));
+      if (x.状態 === '確認待ち') {
+        var b = 作る('button', { type: 'button', class: 'btn ghost small', text: 取り下げている === x.申請ID ? '取り下げています…' : '取り下げる' });
+        b.disabled = !!取り下げている;
+        b.addEventListener('click', function () { 取り下げる(x); });
+        側.appendChild(b);
+      }
+      一覧.appendChild(作る('li', { class: 'li' }, [何, 側]));
+    });
+  }
+
+  /** 新しい申請。1 種類 → 2 日付 → 3 内容（休みの種類 か 打刻の種類と時刻）→ 4 理由 → 5 確認して送る。答えた所まで出す */
+  function 手順を描く() {
+    var 枠 = 要素('申請の手順');
+    枠.textContent = '';
+    var d = 下書きの申請, 今日 = (申請の中身 && 申請の中身.今日) || 今日の日付();
+    var 日数 = 申請の中身 ? 申請の中身.決まり.押し忘れを申請できる日数 : 7;
+    var 送信中 = 申請を送っている;
+    var 問い = function (番, 中身) { return 作る('div', { class: 'q' }, [作る('b', { text: String(番) }), 作る('div', { class: 'body' }, 中身)]); };
+    var チップ列 = function (候補, 今の値, 押したら) {
+      return 作る('div', { class: 'chips' }, 候補.map(function (c) {
+        var b = 作る('button', { type: 'button', class: 'chip' + (今の値 === c ? ' on' : ''), text: c, 'aria-pressed': String(今の値 === c) });
+        b.disabled = 送信中;
+        b.addEventListener('click', function () { 押したら(c); });
+        return b;
+      }));
+    };
+    枠.appendChild(問い(1, [チップ列(['休みの希望', '押し忘れ'], d.種類 === '休み' ? '休みの希望' : d.種類, function (c) {
+      下書きの申請 = 新しい下書き(); 下書きの申請.種類 = c === '休みの希望' ? '休み' : c; 申請を描く();
+    })]));
+    if (!d.種類) return;
+
+    var 日付 = 作る('input', { type: 'date', class: 'input narrow', id: '申請の日付' });
+    if (d.種類 === '休み') 日付.setAttribute('min', 日を足す(今日, 1));
+    else { 日付.setAttribute('min', 日を足す(今日, -日数)); 日付.setAttribute('max', 今日); }
+    日付.value = d.日付;
+    日付.disabled = 送信中;
+    日付.addEventListener('change', function () { d.日付 = 日付.value; 申請を描く(); });
+    枠.appendChild(問い(2, [作る('div', { class: 'row' }, [作る('span', { class: 'muted small', text: d.種類 === '休み' ? '休みたい日（明日以降）' : '押し忘れた日（' + 日数 + '日以内）' }), 日付])]));
+    if (!日付の正しさ(d, 今日, 日数)) return;
+
+    if (d.種類 === '休み') {
+      枠.appendChild(問い(3, [チップ列(['公休', '有給'], d.内容, function (c) { d.内容 = c; 申請を描く(); })]));
+      if (!d.内容) return;
+    } else {
+      var 時刻 = 作る('input', { type: 'time', class: 'input narrow', id: '申請の時刻' });
+      時刻.value = d.時刻;
+      時刻.disabled = 送信中;
+      時刻.addEventListener('change', function () { d.時刻 = 時刻.value; 申請を描く(); });
+      var 翌日 = 作る('button', { type: 'button', class: 'chip' + (d.翌日 ? ' on' : ''), text: '翌日の時刻', 'aria-pressed': String(d.翌日) });
+      翌日.disabled = 送信中;
+      翌日.addEventListener('click', function () { d.翌日 = !d.翌日; 申請を描く(); });
+      var 行 = [作る('span', { class: 'muted small', text: '押し忘れた時刻' }), 時刻];
+      if (d.内容 === '退勤' || d.内容 === '帰着') 行.push(翌日);
+      枠.appendChild(問い(3, [チップ列(['出勤', '退勤', '出発', '帰着'], d.内容, function (c) { d.内容 = c; d.翌日 = false; 申請を描く(); }),
+        d.内容 ? 作る('div', { class: 'row' }, 行) : null]));
+      if (!d.内容 || !/^\d\d:\d\d$/.test(d.時刻)) return;
+    }
+
+    var 理由 = 作る('input', { type: 'text', class: 'input', id: '申請の理由', maxlength: '30', placeholder: 'なくてもよい' });
+    理由.value = d.理由;
+    理由.disabled = 送信中;
+    理由.addEventListener('input', function () { d.理由 = 理由.value; });
+    枠.appendChild(問い(4, [作る('span', { class: 'muted small', text: '理由（30文字まで）' }), 理由]));
+
+    var 確認 = 作る('div', { class: 'confirm' }, [
+      作る('b', { text: 日付の表示(d.日付) + '　' + 申請の文({ 種類: d.種類, 内容: d.内容, 時刻: 申請の時刻(d), 日付: d.日付 }) }),
+      作る('span', { class: 'small', text: d.種類 === '休み' ? '代表が認めると、勤務表に入ります。' : '代表が認めると、その時刻に押したことになります。' })
+    ]);
+    var 送る = 作る('button', { type: 'button', class: 'btn big', id: '申請を送る', text: 送信中 ? '送っています…' : 'この内容で送る' });
+    送る.disabled = 送信中;
+    送る.addEventListener('click', 申請を送る);
+    枠.appendChild(問い(5, [確認, 送る]));
+  }
+
+  function 日付の正しさ(d, 今日, 日数) {
+    if (!/^\d{4}-\d\d-\d\d$/.test(d.日付)) return false;
+    if (d.種類 === '休み') return d.日付 > 今日;
+    return d.日付 <= 今日 && d.日付 >= 日を足す(今日, -日数);
+  }
+
+  /** 押し忘れの時刻を「yyyy-MM-dd HH:mm」に（翌日なら次の日） */
+  function 申請の時刻(d) {
+    if (d.種類 !== '押し忘れ' || !/^\d\d:\d\d$/.test(d.時刻)) return '';
+    return (d.翌日 ? 日を足す(d.日付, 1) : d.日付) + ' ' + d.時刻;
+  }
+
+  function 申請を送る() {
+    if (申請を送っている) return;
+    var d = 下書きの申請;
+    申請を送っている = true;
+    申請を描く();
+    送り直しつきで送る({ 操作: '申請を送る', トークン: 鍵, 操作ID: 新しい操作ID(), 種類: d.種類, 日付: d.日付, 内容: d.内容,
+      時刻: 申請の時刻(d), 理由: d.理由 }, function (r) { return !!r.申請 && typeof r.申請.申請ID === 'string'; }).then(function (結果) {
+      申請を送っている = false;
+      if (!結果.届いた) { 知らせる('送れたか分かりませんでした。「送った申請」に無ければ、もう一度送ってください。'); 申請を読む(); return; }
+      if (!結果.応答.ok) { 断られた(結果.応答, false); 申請を描く(); return; }
+      下書きの申請 = 新しい下書き();
+      知らせる(null);
+      申請を読む();
+    });
+  }
+
+  function 取り下げる(x) {
+    if (取り下げている) return;
+    取り下げている = x.申請ID;
+    申請を描く();
+    送り直しつきで送る({ 操作: '取り下げる', トークン: 鍵, 操作ID: 新しい操作ID(), 申請ID: x.申請ID }, function (r) {
+      return !!r.申請 && r.申請.申請ID === x.申請ID;
+    }).then(function (結果) {
+      取り下げている = '';
+      if (!結果.届いた) { 知らせる('取り下げられたか分かりませんでした。一覧を読み直します。'); 申請を読む(); return; }
+      if (!結果.応答.ok) { 断られた(結果.応答, false); 申請を読む(); return; }
+      申請を読む();
     });
   }
 

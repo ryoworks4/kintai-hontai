@@ -36,7 +36,12 @@
   var 当番の時刻 = '18:00';     // 途中交代の時刻（最後に選んだもの）
 
   // タブ。前に見ていたタブを覚えておく（この端末の中だけ）
-  var タブの名前 = ['月', '勤務表', '記録'];
+  var タブの名前 = ['月', '勤務表', '申請', '記録'];
+  // 段階3：申請
+  var 申請の中身 = null;       // 裏の「申請の一覧」の返事
+  var 申請を読んでいる = false;
+  var 判断している = '';       // 送っている申請ID
+  var 一言の下書き = {};       // 申請ID → 認めない時の一言
   タブの名前.forEach(function (名) {
     要素('タブ-' + 名).addEventListener('click', function () { タブを選ぶ(名); });
   });
@@ -67,6 +72,7 @@
     // 直している途中・送っている途中は、表を読み直さない（入れかけた値が消えないように）
     if (!開いている直し && !直している && !Object.keys(変えている日).length) 月を読む();
     if (勤務表の中身 && !勤務表を送っている && !選んだマス) 勤務表を読む();
+    if (申請の中身 && !判断している && !要素('面-申請').hidden) 申請を読む();
   }
 
   /** 初めて = true の時だけ「読み込んでいます」を出す。2回目からは今の表示のまま裏で読み直す */
@@ -92,6 +98,7 @@
       if (初めて) {
         月を読む();
         if (!要素('面-勤務表').hidden && !勤務表の中身 && !勤務表を読んでいる) 勤務表を読む();
+        if (!要素('面-申請').hidden && !申請の中身 && !申請を読んでいる) 申請を読む();
       }
     });
   }
@@ -120,13 +127,15 @@
       要素('面-' + n).hidden = !選んだ;
     });
     しまう('タブ', 名);
-    // 勤務表は、開いた時に初めて読む（1か月の表と同時に読んで遅くしない）
+    // 勤務表・申請は、開いた時に初めて読む（1か月の表と同時に読んで遅くしない）
     if (名 === '勤務表' && 鍵 && !勤務表の中身 && !勤務表を読んでいる && !勤務表を送っている) 勤務表を読む();
+    if (名 === '申請' && 鍵 && !申請を読んでいる && !判断している) 申請を読む();
   }
 
   function 描く(中身) {
     要素('名前').textContent = 中身.自分.名前;
     要素('読んだ時刻').textContent = 端末の時分(Date.now()) + ' に読み込み';
+    申請の件数を出す(中身.確認待ちの申請);
 
     // 1か月の表を見る人。前に見ていた人を覚えておく（いなければ、代表でない最初の人）
     var 月の選ぶ = 要素('月の職員');
@@ -159,7 +168,7 @@
   /** 一覧の中身の形を、1件ずつ確かめる（欠けた記録を描いて画面が崩れたり、別の返事を一覧と取り違えたりしない） */
   function 一覧の形か(r) {
     var 文字 = function (o, キー) { return キー.every(function (k) { return typeof o[k] === 'string'; }); };
-    return !!r.自分 && typeof r.自分.名前 === 'string' &&
+    return !!r.自分 && typeof r.自分.名前 === 'string' && typeof r.確認待ちの申請 === 'number' &&
         Array.isArray(r.職員) && r.職員.every(function (p) { return 文字(p, ['職員ID', '名前', '役割']); }) &&
         Array.isArray(r.記録) && r.記録.every(function (k) { return 文字(k, ['記録ID', '名前', '種類', '時刻']); });
   }
@@ -939,6 +948,136 @@
     b.disabled = 送っている;
     b.addEventListener('click', function () { 配るか聞いている = true; 選んだマス = null; 勤務表を描く(); });
     枠.appendChild(b);
+  }
+
+  // ── 段階3：申請 ────────────────────────────────────────────
+  // 確認待ちの一覧で、その場で認める・認めない（一言つき）。返事の一覧で描き直す。読むだけでも代表の操作なので裏は鍵の中で確かめる
+
+  /** タブの名前に確認待ちの件数（「申請 2」）。0 なら出さない */
+  function 申請の件数を出す(n) {
+    var タブ = 要素('タブ-申請');
+    タブ.textContent = '';
+    タブ.appendChild(作る('span', { text: '申請' }));
+    if (n > 0) タブ.appendChild(作る('span', { class: 'badge', text: String(n) }));
+  }
+
+  function 申請を読む() {
+    if (!鍵) return;
+    申請を読んでいる = true;
+    要素('申請の状態').textContent = '読み込んでいます…';
+    送り直しつきで送る({ 操作: '申請の一覧', トークン: 鍵 }, 申請の一覧の形か).then(function (結果) {
+      申請を読んでいる = false;
+      if (!結果.届いた) { 要素('申請の状態').textContent = '読み込めませんでした。少し待ってから、タブを押し直してください。'; return; }
+      if (!結果.応答.ok) { 要素('申請の状態').textContent = ''; 断られた(結果.応答); return; }
+      申請を受け取る(結果.応答);
+    });
+  }
+
+  function 申請を受け取る(中身) {
+    申請の中身 = 中身;
+    申請の件数を出す(中身.確認待ち);
+    申請を描く();
+  }
+
+  function 申請の一覧の形か(r) {
+    var 文字 = function (o, キー) { return !!o && キー.every(function (k) { return typeof o[k] === 'string'; }); };
+    return typeof r.確認待ち === 'number' && Array.isArray(r.申請) && r.申請.every(function (x) {
+      return 文字(x, ['申請ID', '職員ID', '名前', '種類', '日付', '内容', '時刻', '理由', '日時', '状態', '一言', '判断の日時']) &&
+          ['確認待ち', '認める', '認めない', '取り下げ'].indexOf(x.状態) >= 0 &&
+          (x.状態 !== '確認待ち' || (!!x.様子 && typeof x.様子.区分 === 'string' && typeof x.様子.出勤人数 === 'number'));
+    });
+  }
+
+  function 申請の文(x) {
+    if (x.種類 === '休み') return '休みの希望（' + x.内容 + '）';
+    return '押し忘れ ' + x.内容 + ' ' + その日の時分(x.時刻, x.日付);
+  }
+
+  function 状態の札(x) {
+    if (x.状態 === '確認待ち') return 作る('span', { class: 'pill wait', text: '確認待ち' });
+    if (x.状態 === '認める') return 作る('span', { class: 'pill ok', text: '認めた' });
+    if (x.状態 === '認めない') return 作る('span', { class: 'pill no', text: '認めない' });
+    return 作る('span', { class: 'pill no', text: '取り下げ' });
+  }
+
+  function 申請を描く() {
+    var 表 = 要素('申請の表');
+    表.textContent = '';
+    var 中身 = 申請の中身;
+    if (!中身) return;
+    要素('申請の状態').textContent = 中身.申請.length ? '' : 'まだ申請はありません。';
+    if (!中身.申請.length) return;
+    表.appendChild(作る('thead', {}, [作る('tr', {}, ['送った日', 'だれ', '申請', '勤務表では', '理由', ''].map(function (s) { return 作る('th', { text: s }); }))]));
+    var 本体 = 作る('tbody');
+    中身.申請.forEach(function (x) {
+      var tr = 作る('tr', { class: x.状態 === '確認待ち' ? 'wait' : '' });
+      tr.appendChild(作る('td', { text: 月日(x.日時) }));
+      tr.appendChild(作る('td', { text: x.名前 }));
+      tr.appendChild(作る('td', { text: 日付の表示(x.日付) + ' ' + 申請の文(x) }));
+      tr.appendChild(作る('td', { class: 'muted small', text: 様子の文(x) }));
+      tr.appendChild(作る('td', { text: x.理由 }));
+      tr.appendChild(作る('td', {}, [判断の欄(x)]));
+      本体.appendChild(tr);
+    });
+    表.appendChild(本体);
+  }
+
+  /** 確認待ちに添える、その日の勤務表と記録の様子 */
+  function 様子の文(x) {
+    if (x.状態 !== '確認待ち' || !x.様子) return '';
+    var s = x.様子, 出 = [];
+    出.push(s.区分 ? s.区分 : 'まだ入れていない');
+    出.push('出勤 ' + s.出勤人数 + '人');
+    if (s.当番) 出.push('当番 ' + s.当番);
+    if (x.種類 === '押し忘れ') {
+      出.push('記録：' + (s.出勤 ? '出勤 ' + その日の時分(s.出勤, x.日付) : '出勤なし') + '・' + (s.退勤 ? '退勤 ' + その日の時分(s.退勤, x.日付) : '退勤なし'));
+      (s.夜 || []).forEach(function (n) { 出.push('夜 ' + その日の時分(n.出発, x.日付) + '→' + (n.帰着 ? その日の時分(n.帰着, x.日付) : '帰着なし')); });
+    }
+    return 出.join('・');
+  }
+
+  /** 確認待ちは、その場で認める・認めない。認めないは一言（30文字まで・空でもよい）を入れてから */
+  function 判断の欄(x) {
+    var 枠 = 作る('div', { class: 'acts' });
+    if (x.状態 !== '確認待ち') {
+      枠.appendChild(状態の札(x));
+      if (x.一言) 枠.appendChild(作る('span', { class: 'muted small', text: '「' + x.一言 + '」' }));
+      return 枠;
+    }
+    if (判断している === x.申請ID) { 枠.appendChild(作る('span', { class: 'muted small', text: '送っています…' })); return 枠; }
+    var 認める = 作る('button', { type: 'button', class: 'btn small', text: '認める' });
+    var 認めない = 作る('button', { type: 'button', class: 'btn ghost small', text: '認めない' });
+    認める.disabled = 認めない.disabled = !!判断している;
+    認める.addEventListener('click', function () { 判断を送る(x, '認める', ''); });
+    認めない.addEventListener('click', function () {
+      // 一言の欄を出し、もう一度押すと送る
+      if (一言の下書き[x.申請ID] === undefined) { 一言の下書き[x.申請ID] = ''; 申請を描く(); return; }
+      判断を送る(x, '認めない', 一言の下書き[x.申請ID]);
+    });
+    枠.appendChild(認める);
+    枠.appendChild(認めない);
+    if (一言の下書き[x.申請ID] !== undefined) {
+      var 一言 = 作る('input', { type: 'text', class: 'input short', id: '一言-' + x.申請ID, maxlength: '30', placeholder: '一言（なくてもよい）' });
+      一言.value = 一言の下書き[x.申請ID];
+      一言.addEventListener('input', function () { 一言の下書き[x.申請ID] = 一言.value; });
+      枠.appendChild(一言);
+    }
+    return 枠;
+  }
+
+  function 判断を送る(x, 判断, 一言) {
+    if (判断している) return;
+    判断している = x.申請ID;
+    申請を描く();
+    送り直しつきで送る({ 操作: '判断する', トークン: 鍵, 操作ID: 新しい操作ID(), 申請ID: x.申請ID, 判断: 判断, 一言: 一言 }, 申請の一覧の形か).then(function (結果) {
+      判断している = '';
+      delete 一言の下書き[x.申請ID];
+      if (!結果.届いた) { 知らせる('送れたか分かりませんでした。一覧を読み直します。'); 申請を読む(); return; }
+      if (!結果.応答.ok) { 断られた(結果.応答); 申請を読む(); return; }
+      申請を受け取る(結果.応答);
+      // 認めた休みは勤務表に、押し忘れは1か月の表に入る。開いていれば読み直す
+      if (判断 === '認める') { if (勤務表の中身) 勤務表を読む(); 月を読む(); }
+    });
   }
 
   function 配る() {

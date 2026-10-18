@@ -86,7 +86,15 @@
     </div>
 
     <div id="面-申請" role="tabpanel" aria-labelledby="タブ-申請" hidden>
-      <div class="card"><h2>申請</h2><p class="muted">休みの希望や押し忘れの申請は、次の段階で使えるようになります。</p></div>
+      <div class="card" id="新しい申請">
+        <h2>新しく申請する</h2>
+        <div class="wiz" id="申請の手順"></div>
+      </div>
+      <div class="card">
+        <h2>送った申請</h2>
+        <p class="muted small" id="申請の状態" role="status"></p>
+        <ul class="list reqs" id="申請の一覧"></ul>
+      </div>
     </div>
 
     <div id="面-記録" role="tabpanel" aria-labelledby="タブ-記録" hidden>

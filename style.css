@@ -257,3 +257,22 @@ thead th { background: var(--surface2); font-weight: 700; }
 .tag.night { background: var(--night-soft); color: var(--night); }
 .tag.chg { background: var(--warn-soft); color: var(--warn); border: 1px solid var(--warn); }
 .tag.tmp { background: var(--warn-soft); color: var(--warn); }
+
+/* 段階3：申請 */
+.wiz { display: grid; gap: 10px; }
+.wiz .q { display: grid; grid-template-columns: 1.6em 1fr; gap: 8px; align-items: start; }
+.wiz .q > b { color: var(--muted); font-family: var(--mono); padding-top: 6px; }
+.wiz .q .body { display: grid; gap: 6px; min-width: 0; }
+.wiz .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.wiz .input.narrow { width: auto; min-width: 9em; }
+.wiz .confirm { background: var(--accent-soft); border-radius: 10px; padding: 10px 12px; display: grid; gap: 4px; font-size: .92rem; }
+.list.reqs .li { grid-template-columns: 1fr auto; align-items: start; }
+.list.reqs .li .what { display: grid; gap: 2px; }
+.list.reqs .li .what small { color: var(--muted); }
+.list.reqs .li .side { display: grid; gap: 6px; justify-items: end; }
+.pill.wait { background: var(--warn-soft); color: var(--warn); border: 1px solid var(--warn); }
+.req-table td { vertical-align: top; white-space: normal; }
+.req-table tr.wait td { background: var(--warn-soft); }
+.req-table .acts { align-items: center; }
+.req-table .input.short { width: 12em; padding: 6px 8px; font-size: .9rem; }
+.badge { display: inline-block; min-width: 1.5em; padding: 0 6px; border-radius: 999px; background: var(--warn); color: #fff; font-size: .72rem; margin-left: 4px; vertical-align: 1px; }
