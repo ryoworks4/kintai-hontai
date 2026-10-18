@@ -688,7 +688,7 @@
         Array.isArray(r.職員) && r.職員.every(function (p) {
           return 文字(p, ['職員ID', '名前', '役割']) && Array.isArray(p.日) && p.日.length >= 28 &&
               p.日.every(function (d) { return 文字(d, ['日付', '区分', '当番', '代休の元']) && typeof d.変わった === 'boolean' && d.日付.slice(0, 7) === 見る月; }) &&
-              数(p.集計, ['日数', '土日祝', '休', '当番', '代休の残り']);
+              数(p.集計, ['日数', '土日祝', '休', '有給', '当番', '代休の残り']);
         }) &&
         Array.isArray(r.足りない日) && r.足りない日.every(function (x) { return 文字(x, ['日付']) && Array.isArray(x.理由); }) &&
         Array.isArray(r.不備) && r.不備.every(function (x) { return 文字(x, ['職員ID', '日付', '文']); });
@@ -747,7 +747,7 @@
       if (足りない[D]) th.setAttribute('title', 足りない[D]);
       見出し.appendChild(th);
     });
-    [['日数', '(土日祝)'], ['休', ''], ['当番', ''], ['代休', 'の残り']].forEach(function (x) {
+    [['日数', '(土日祝)'], ['休', ''], ['有給', ''], ['当番', ''], ['代休', 'の残り']].forEach(function (x) {
       var th = 作る('th', {}, [作る('span', { text: x[0] })]);
       if (x[1]) th.appendChild(作る('span', { class: 'wd', text: x[1] }));
       見出し.appendChild(th);
@@ -767,7 +767,7 @@
       });
       var g = p.集計;
       // 集計は勤務の行に。rowspan にすると勤務の行だけが縦に伸びる
-      [日数の表示(g.日数) + '(' + g.土日祝 + ')', String(g.休), String(g.当番), String(g.代休の残り)].forEach(function (s) {
+      [日数の表示(g.日数) + '(' + g.土日祝 + ')', String(g.休), 日数の表示(g.有給), String(g.当番), String(g.代休の残り)].forEach(function (s) {
         勤務行.appendChild(作る('td', { class: 'tally', text: s }));
         当番行.appendChild(作る('td', { class: 'tally' }));
       });
@@ -777,7 +777,8 @@
     表.appendChild(本体);
 
     要素('勤務表の凡例').textContent = (中身.状態 ? '赤い日付＝人の足りない日（当番がいない・2人以上・出勤がいない）。' : '') +
-        '枠がオレンジ＝配った後に変えたマス。' + 中身.型.filter(function (t) { return t.状態 === '仮'; }).map(function (t) {
+        '枠がオレンジ＝配った後に変えたマス。' +
+        (中身.型.some(function (t) { return t.型.indexOf('/') >= 0; }) ? '「/」の左が午前・右が午後（ヤ＝休み・ネ＝年休）。ハ＝早出・オ＝遅出。' : '') + 中身.型.filter(function (t) { return t.状態 === '仮'; }).map(function (t) {
           return t.型 + ' の時間帯（' + 時刻の表示(t.始業) + '〜' + 時刻の表示(t.終業) + '）は仮です。';
         }).join('');
 
