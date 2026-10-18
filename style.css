@@ -276,3 +276,21 @@ thead th { background: var(--surface2); font-weight: 700; }
 .req-table .acts { align-items: center; }
 .req-table .input.short { width: 12em; padding: 6px 8px; font-size: .9rem; }
 .badge { display: inline-block; min-width: 1.5em; padding: 0 6px; border-radius: 999px; background: var(--warn); color: #fff; font-size: .72rem; margin-left: 4px; vertical-align: 1px; }
+
+/* 段階4：給与 */
+.notes { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.note { padding: 8px 12px; border-radius: 10px; font-size: .9rem; border: 1px solid var(--line); background: var(--surface2); }
+.note.warn { background: var(--warn-soft); border-color: var(--warn); color: var(--ink); }
+.note.bad { background: var(--ng-soft); border-color: var(--ng); color: var(--ink); }
+.pay-table td { vertical-align: middle; }
+.pay-table td.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pay-table td.total { font-weight: 700; }
+.pay-table td.diff { color: var(--warn); font-weight: 700; }
+.pay-table tr.picked td { background: var(--accent-soft); }
+.pay-table th.num { text-align: right; }
+.pay-table.detail td:first-child { white-space: normal; }
+@media (max-width: 480px) { .pay-table th, .pay-table td { padding-inline: 6px; } }
+.pay-table .how { display: block; color: var(--muted); font-size: .76rem; line-height: 1.4; white-space: normal; }
+.pay-table tr.total-row td { border-top: 2px solid var(--ink); font-weight: 700; }
+.name-btn { appearance: none; background: none; border: 0; padding: 4px 0; color: var(--accent); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; text-align: left; }
+.name-btn[aria-pressed="true"] { color: var(--ink); text-decoration: none; }

@@ -31,6 +31,7 @@
         <button type="button" class="tab on" role="tab" id="タブ-月" aria-controls="面-月" aria-selected="true">1か月の表</button>
         <button type="button" class="tab" role="tab" id="タブ-勤務表" aria-controls="面-勤務表" aria-selected="false">勤務表</button>
         <button type="button" class="tab" role="tab" id="タブ-申請" aria-controls="面-申請" aria-selected="false">申請</button>
+        <button type="button" class="tab" role="tab" id="タブ-給与" aria-controls="面-給与" aria-selected="false">給与</button>
         <button type="button" class="tab" role="tab" id="タブ-記録" aria-controls="面-記録" aria-selected="false">記録の一覧</button>
       </div>
       <p class="muted small" id="読んだ時刻"></p>
@@ -86,6 +87,30 @@
       <div class="scroll">
         <table class="req-table" id="申請の表" aria-label="申請の一覧"></table>
       </div>
+    </div>
+
+    <div class="card" id="面-給与" role="tabpanel" aria-labelledby="タブ-給与" hidden>
+      <h2 class="sr">給与</h2>
+      <div class="row">
+        <div class="month">
+          <button type="button" class="btn ghost small" id="給与の前の月" aria-label="前の月">‹</button>
+          <b id="給与の月の表示"></b>
+          <button type="button" class="btn ghost small" id="給与の次の月" aria-label="次の月">›</button>
+        </div>
+        <span class="muted small" id="給与の状態" role="status"></span>
+        <div class="acts" id="給与の操作"></div>
+      </div>
+      <ul class="notes" id="給与の知らせ"></ul>
+      <div class="scroll">
+        <table class="pay-table" id="給与の一覧" aria-label="職員ごとの総支給額"></table>
+      </div>
+      <h3 class="sub" id="給与の内訳の見出し"></h3>
+      <div class="scroll">
+        <table class="pay-table detail" id="給与の内訳" aria-label="内訳"></table>
+      </div>
+      <p class="muted small" id="給与の内訳の下"></p>
+      <ul class="list small" id="給与の気になる日" hidden></ul>
+      <p class="muted small">残業は「認めた」分だけ入ります。端数は項目ごとに円未満を切り上げます。社会保険・税の控除は入っていません（総支給額までを社労士へ）。</p>
     </div>
 
     <div class="card" id="面-記録" role="tabpanel" aria-labelledby="タブ-記録" hidden>
