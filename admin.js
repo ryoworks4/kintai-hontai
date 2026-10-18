@@ -105,7 +105,8 @@
 
     // 1か月の表を見る人。前に見ていた人を覚えておく（いなければ、代表でない最初の人）
     var 月の選ぶ = 要素('月の職員');
-    var 見ていた = 月の選ぶ.value || 取り出す('月の職員') || '';
+    var 前の選択 = 月の選ぶ.value;
+    var 見ていた = 前の選択 || 取り出す('月の職員') || '';
     var 見る人 = 中身.職員.filter(function (人) { return 人.職員ID === 見ていた; })[0] ||
         中身.職員.filter(function (人) { return 人.役割 !== '管理者'; })[0] || 中身.職員[0];
     月の選ぶ.textContent = '';
@@ -114,6 +115,9 @@
       if (見る人 && 人.職員ID === 見る人.職員ID) o.selected = true;
       月の選ぶ.appendChild(o);
     });
+    // 見ていた人が一覧から消えて（退職など）選択が自動で変わった時も、手で選び直した時と同じく、
+    // 前の人の表を消して読み直す ②（2026-10-18 Codex 2回目 C。自動の選択は change を通らない）
+    if (前の選択 && 月の選ぶ.value !== 前の選択) 月を読む();
 
     var 表 = 要素('記録');
     表.textContent = '';
@@ -208,7 +212,7 @@
     送り直しつきで送る({ 操作: '1か月の表', トークン: 鍵, 職員ID: 職員ID, 月: 見る月 }, function (r) {
       return !!r.職員 && r.職員.職員ID === 職員ID && typeof r.職員.名前 === 'string' && r.月 === 見る月 &&
           Array.isArray(r.日) && r.日.length >= 28 &&
-          r.日.every(function (d) { return 日の形か(d, true) && d.日付.slice(0, 7) === 見る月; }) &&
+          r.日.every(function (d) { return 代表の日か(d) && d.日付.slice(0, 7) === 見る月; }) &&
           合計の形か(r.合計) && Array.isArray(r.直した記録) && r.直した記録.every(直しの形か);
     }).then(function (結果) {
       if (番 !== 月を読む番) return;
@@ -225,6 +229,16 @@
     });
   }
 
+  /**
+   * 送る直前に、選択欄の人・いまの月と、出ている表の人・月が同じかを確かめる。違えば送らずに読み直す ②
+   *（2026-10-18 Codex 2回目 C。選択が change を通らずに変わっても、前の人の表から送らない）
+   */
+  function 表と選択が同じか() {
+    if (月の中身 && 月の中身.職員.職員ID === 要素('月の職員').value && 月の中身.月 === 月) return true;
+    月を読む();
+    return false;
+  }
+
   function 月を消す() {
     月の中身 = null;
     変えている日 = {};
@@ -234,8 +248,11 @@
     要素('直した記録').textContent = '';
   }
 
+  /** 代表に返る1日の形。前後の日との重なり（Codex 2回目 D）が無い返事は、古い裏からの返事とみなして使わない */
+  function 代表の日か(d) { return 日の形か(d, true) && typeof d.前後が重なる === 'boolean'; }
+
   function 合計の形か(g) {
-    return !!g && ['働いた分', '差分', '給与へ分', '確認待ち', '夜の回数'].every(function (k) { return typeof g[k] === 'number'; });
+    return !!g && ['働いた分', '差分', '給与へ分', '確認待ち', '夜の回数', '重なる日'].every(function (k) { return typeof g[k] === 'number'; });
   }
 
   function 直しの形か(r) {
@@ -246,12 +263,13 @@
 
   /** 裏と同じ足し方（1日を置き換えた時に、読み直さずに合計を出す） */
   function 合計を出す(日) {
-    var g = { 働いた分: 0, 差分: 0, 給与へ分: 0, 確認待ち: 0, 夜の回数: 0 };
+    var g = { 働いた分: 0, 差分: 0, 給与へ分: 0, 確認待ち: 0, 夜の回数: 0, 重なる日: 0 };
     日.forEach(function (d) {
       if (d.働いた分 !== null) g.働いた分 += d.働いた分;
       if (d.差分 !== null && d.差分 > 0) g.差分 += d.差分;
       g.給与へ分 += d.給与へ分;
       if (d.確認 === '確認待ち') g.確認待ち++;
+      if (d.前後が重なる) g.重なる日++;
       g.夜の回数 += d.夜.filter(function (n) { return !n.数えない; }).length;
     });
     return g;
@@ -275,6 +293,13 @@
         作る('span', { class: 'muted small', text: x[0] }), 作る('b', { class: 'mono', text: x[1] })
       ]));
     });
+    // 重なっている日は、時間を合計に入れていない。直すまで目に付くように、ある時だけ出す
+    if (g.重なる日) {
+      合計.appendChild(作る('div', { class: 'sum wait' }, [
+        作る('span', { class: 'muted small', text: '前後の日と重なっている日（合計に入れていない）' }),
+        作る('b', { class: 'mono', text: g.重なる日 + '日' })
+      ]));
+    }
 
     var 表 = 要素('月の表');
     表.textContent = '';
@@ -316,7 +341,7 @@
 
   function 行を作る(d) {
     var 記録あり = !!(d.出勤 || d.退勤 || d.夜.length);
-    var tr = 作る('tr', { class: d.確認 === '確認待ち' ? 'wait' : (記録あり ? '' : 'empty') });
+    var tr = 作る('tr', { class: d.確認 === '確認待ち' || d.前後が重なる ? 'wait' : (記録あり ? '' : 'empty') });
 
     tr.appendChild(作る('td', { text: 日付の表示(d.日付) }));
 
@@ -333,6 +358,7 @@
     tr.appendChild(作る('td', { class: 'num', text: d.働いた分 === null ? '' : 時間の表示(d.働いた分) }));
 
     var 差 = 作る('td');
+    if (d.前後が重なる) 差.appendChild(作る('span', { class: 'missing small', text: '前後の日と時刻が重なっています。直すまで合計に入れません' }));
     if (d.差分 !== null) {
       差.appendChild(作る('b', { class: 'mono' + (d.理由が要る ? ' diff' : ' muted'), text: 差の表示(d.差分) }));
       if (d.理由が要る) 差.appendChild(字(' ' + (d.理由 || '理由なし'), 直したか(d, '理由'), d.理由 ? '' : 'muted'));
@@ -390,13 +416,14 @@
    * 裏が断るので表を読み直す。届いたか分からない時も、表を読み直して今の状態を見せる（送り直しても二重にならない）
    */
   function 判断する(d, 判断) {
+    if (!表と選択が同じか()) return;
     var 中身 = 月の中身, 職員ID = 中身.職員.職員ID;
     変えている日[d.日付] = 判断;
     月を描く();
     送り直しつきで送る({
       操作: '残業の確認', トークン: 鍵, 操作ID: 新しい操作ID(), 職員ID: 職員ID, 日付: d.日付, 判断: 判断, 差分: d.差分
     }, function (r) {
-      return !!r.確認 && r.確認.日付 === d.日付 && r.確認.判断 === 判断 && 日の形か(r.日, true) && r.日.日付 === d.日付;
+      return !!r.確認 && r.確認.日付 === d.日付 && r.確認.判断 === 判断 && 代表の日か(r.日) && r.日.日付 === d.日付;
     }).then(function (結果) {
       if (月の中身 !== 中身) return;   // 待っている間に、人か月を変えて読み直した
       delete 変えている日[d.日付];
@@ -497,7 +524,8 @@
 
     用紙.addEventListener('submit', function (e) {
       e.preventDefault();
-      var 変更 = 欄たち.map(function (f) { return { 欄: f.欄, 元の値: f.元の値, 新しい値: f.新しい値を出す() }; })
+      if (!表と選択が同じか()) return;
+      var 変更 =欄たち.map(function (f) { return { 欄: f.欄, 元の値: f.元の値, 新しい値: f.新しい値を出す() }; })
           .filter(function (c) { return c.新しい値 !== c.元の値; });
       if (!変更.length) { 返事.textContent = '変えた所がありません。'; return; }
       送る.disabled = true;
@@ -528,7 +556,7 @@
     送り直しつきで送る({
       操作: '直す', トークン: 鍵, 操作ID: 新しい操作ID(), 職員ID: 職員ID, 日付: d.日付, 変更: 変更, 理由: なぜ
     }, function (r) {
-      return 日の形か(r.日, true) && r.日.日付 === d.日付 && Array.isArray(r.直し) &&
+      return 代表の日か(r.日) && r.日.日付 === d.日付 && Array.isArray(r.直し) &&
           r.直し.every(function (x) { return 直しの形か(Object.assign({ 直した人: '' }, x)); });
     }).then(function (結果) {
       直している = false;
