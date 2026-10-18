@@ -171,11 +171,12 @@
       var 右 = 作る('span', { class: 'acts' });
       var m = /^(\d\d:\d\d)(から|まで)$/.exec(d.当番);
       if (d.当番 === '○') 右.appendChild(作る('span', { class: 'tag night', text: '当番' }));
-      else if (m) 右.appendChild(作る('span', { class: 'tag night', text: '当番 ' + Number(m[1].slice(0, 2)) + m[1].slice(2) + m[2] }));
+      else if (m) 右.appendChild(作る('span', { class: 'tag night', text: m[2] === 'まで' ? '〜' + Number(m[1].slice(0, 2)) + m[1].slice(2) + ' 当番' : Number(m[1].slice(0, 2)) + m[1].slice(2) + '〜 当番' }));
       if (d.変わった日時 && d.変わった日時 > 見た) 右.appendChild(作る('span', { class: 'tag chg', text: '変わりました' }));
       if (d.変わった日時 > いちばん新しい) いちばん新しい = d.変わった日時;
       var 休みの名前 = { 祝: '祝日・休み', 代: '代休', 夏: '夏季休暇', 年: '有給', 正: '年末年始' };
-      var 中 = d.休み ? (休みの名前[d.区分] || '休み')
+      // 配った後も代表がまだ入れていない日（区分が空）は、休みと決まったわけではない
+      var 中 = d.休み ? (d.区分 === '' ? 'まだ決まっていません' : 休みの名前[d.区分] || '休み')
           : Number(d.始業.slice(0, 2)) + d.始業.slice(2) + '〜' + Number(d.終業.slice(0, 2)) + d.終業.slice(2) + (d.区分 !== '日' ? '（' + d.区分 + '）' : '');
       一覧.appendChild(作る('li', { class: 'li' + (d.休み ? ' off' : '') }, [
         作る('span', { class: 'd' + (w === 6 ? ' sat' : w === 0 ? ' sun' : ''), text: Number(d.日付.slice(8)) + ' ' },
