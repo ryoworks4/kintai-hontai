@@ -1,5 +1,6 @@
 /**
- * 勤怠システム — 代表の画面（職員ごとの1か月・登録番号を出す・記録の一覧・端末を止める）
+ * 勤怠システム — 代表の画面（タブ2つ：職員ごとの1か月・記録の一覧）
+ * 登録コードと使える端末は、矢作さんがスプレッドシートで扱う（2026-10-18 矢作さん）。
  *
  * 読み込みボタンは置かない。開いた時と、ほかのアプリから戻った時に自動で読み込む
  * （池田建設で「読込ボタン・押してから遅い」が不満になった）。
@@ -13,7 +14,6 @@
   var 鍵 = 取り出す('トークン');
   var 読んでいる = false;
   var 最後に読んだ = 0;
-  var 選んでいた職員ID = '';
 
   // 職員ごとの1か月
   var 月 = 今日の日付().slice(0, 7);
@@ -25,7 +25,11 @@
   var 直している = false;
   var 開いたまとまり = {};      // 記録の無い日のまとまりの最初の日付 → 開いている（人か月を変えたら閉じる）
 
-  要素('番号を出す').addEventListener('click', 番号を出す);
+  // タブ。前に見ていたタブを覚えておく（この端末の中だけ）
+  ['月', '記録'].forEach(function (名) {
+    要素('タブ-' + 名).addEventListener('click', function () { タブを選ぶ(名); });
+  });
+  タブを選ぶ(取り出す('タブ') === '記録' ? '記録' : '月');
   要素('月の職員').addEventListener('change', function () {
     しまう('月の職員', 要素('月の職員').value);
     月を読む();
@@ -91,18 +95,19 @@
     知らせる(応答.理由);
   }
 
+  function タブを選ぶ(名) {
+    ['月', '記録'].forEach(function (n) {
+      var 選んだ = n === 名;
+      要素('タブ-' + n).setAttribute('aria-selected', String(選んだ));
+      要素('タブ-' + n).classList.toggle('on', 選んだ);
+      要素('面-' + n).hidden = !選んだ;
+    });
+    しまう('タブ', 名);
+  }
+
   function 描く(中身) {
     要素('名前').textContent = 中身.自分.名前;
     要素('読んだ時刻').textContent = 端末の時分(Date.now()) + ' に読み込み';
-
-    // 登録番号を出す相手。選んでいた人は、読み直しても選んだまま
-    var 選ぶ = 要素('職員を選ぶ');
-    選ぶ.textContent = '';
-    中身.職員.forEach(function (人) {
-      var o = 作る('option', { value: 人.職員ID, text: 人.名前 + (人.役割 === '管理者' ? '（代表）' : '') });
-      if (人.職員ID === 選んでいた職員ID) o.selected = true;
-      選ぶ.appendChild(o);
-    });
 
     // 1か月の表を見る人。前に見ていた人を覚えておく（いなければ、代表でない最初の人）
     var 月の選ぶ = 要素('月の職員');
@@ -130,39 +135,6 @@
       ]));
     });
     if (!中身.記録.length) 表.appendChild(作る('tr', {}, [作る('td', { colspan: '3', class: 'muted', text: 'まだ記録はありません' })]));
-
-    // 端末は表にしない。スマホ幅で「止めますか？」を出しても横にはみ出さないように、1台1行で折り返す
-    var 端末一覧 = 要素('端末');
-    端末一覧.textContent = '';
-    中身.端末.forEach(function (t) {
-      var 操作 = 作る('div', { class: 'act' });
-      if (t.自分) 操作.appendChild(作る('span', { class: 'muted small', text: 'この端末' }));
-      else 止めるボタンを置く(操作, t);
-      端末一覧.appendChild(作る('div', { class: 'device' }, [
-        作る('div', {}, [
-          作る('div', { class: 'who', text: t.名前 }),
-          作る('div', { class: 'muted small', text: t.端末名 + '・' + 月日(t.登録日時) + ' に登録' })
-        ]),
-        操作
-      ]));
-    });
-  }
-
-  /** 止める → その場で「止めますか？」を出してから送る */
-  function 止めるボタンを置く(枠, t) {
-    枠.textContent = '';
-    var b = 作る('button', { type: 'button', class: 'btn ghost small', text: '止める' });
-    b.addEventListener('click', function () {
-      枠.textContent = '';
-      var はい = 作る('button', { type: 'button', class: 'btn danger small', text: '止める' });
-      var いいえ = 作る('button', { type: 'button', class: 'btn ghost small', text: 'やめる' });
-      いいえ.addEventListener('click', function () { 止めるボタンを置く(枠, t); });
-      はい.addEventListener('click', function () { 止める(枠, t); });
-      枠.appendChild(作る('span', { class: 'ask', text: '止めますか？' }));
-      枠.appendChild(はい);
-      枠.appendChild(いいえ);
-    });
-    枠.appendChild(b);
   }
 
   /** 一覧の中身の形を、1件ずつ確かめる（欠けた記録を描いて画面が崩れたり、別の返事を一覧と取り違えたりしない） */
@@ -170,26 +142,7 @@
     var 文字 = function (o, キー) { return キー.every(function (k) { return typeof o[k] === 'string'; }); };
     return !!r.自分 && typeof r.自分.名前 === 'string' &&
         Array.isArray(r.職員) && r.職員.every(function (p) { return 文字(p, ['職員ID', '名前', '役割']); }) &&
-        Array.isArray(r.端末) && r.端末.every(function (t) {
-          return 文字(t, ['端末ID', '職員ID', '名前', '端末名', '登録日時']) && typeof t.自分 === 'boolean';
-        }) &&
         Array.isArray(r.記録) && r.記録.every(function (k) { return 文字(k, ['記録ID', '名前', '種類', '時刻']); });
-  }
-
-  function 止める(枠, t) {
-    枠.textContent = '止めています…';
-    送り直しつきで送る({ 操作: '失効', トークン: 鍵, 端末ID: t.端末ID }, function (r) {
-      return r.端末ID === t.端末ID;
-    }).then(function (結果) {
-      if (!結果.届いた) {
-        止めるボタンを置く(枠, t);
-        知らせる('止められたか分かりませんでした。もう一度ためしてください。');
-        return;
-      }
-      if (!結果.応答.ok) { 止めるボタンを置く(枠, t); 断られた(結果.応答); return; }
-      枠.textContent = '止めました';
-      読み込む(false);
-    });
   }
 
   // ── 職員ごとの1か月 ─────────────────────────────────────
@@ -629,35 +582,6 @@
       }
       知らせる(null);
       月を読む();   // 合計と直した記録をそろえる
-    });
-  }
-
-  function 番号を出す() {
-    var 職員ID = 要素('職員を選ぶ').value;
-    var ボタン = 要素('番号を出す');
-    var 箱 = 要素('番号の箱');
-    if (!職員ID) return;
-    選んでいた職員ID = 職員ID;
-    ボタン.disabled = true;
-    箱.hidden = false;
-    要素('番号').textContent = '······';
-    要素('番号の説明').textContent = '番号を出しています…';
-    // 押すたびに操作IDを1つ付ける。送り直しも、遅れて届いた元の依頼も、裏は同じ番号を返す
-    送り直しつきで送る({ 操作: '番号を出す', トークン: 鍵, 職員ID: 職員ID, 操作ID: 新しい操作ID() }, function (r) {
-      return /^\d{6}$/.test(r.番号) && typeof r.期限 === 'string' && typeof r.名前 === 'string' && r.職員ID === 職員ID;
-    }).then(function (結果) {
-      ボタン.disabled = false;
-      if (!結果.届いた) {
-        箱.hidden = true;
-        知らせる('番号を出せませんでした。もう一度押してください。');
-        return;
-      }
-      if (!結果.応答.ok) { 箱.hidden = true; 断られた(結果.応答); return; }
-      // 待っている間に別の人を選び直していたら、取り違えないよう番号は出さない（もう一度押してもらう）
-      if (要素('職員を選ぶ').value !== 職員ID) { 箱.hidden = true; return; }
-      要素('番号').textContent = 結果.応答.番号.slice(0, 3) + ' ' + 結果.応答.番号.slice(3);
-      要素('番号の説明').textContent = 結果.応答.名前 + ' さんの番号です。' + 時分(結果.応答.期限) +
-          ' まで、1回だけ使えます。新しく出すと、この番号は使えなくなります。';
     });
   }
 })();

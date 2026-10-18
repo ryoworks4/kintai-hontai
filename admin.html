@@ -26,10 +26,16 @@
   <section id="登録" hidden></section>
 
   <section id="本体" hidden>
-    <p class="muted small right" id="読んだ時刻"></p>
+    <div class="tabs-row">
+      <div class="tabs" role="tablist" aria-label="見るもの">
+        <button type="button" class="tab on" role="tab" id="タブ-月" aria-controls="面-月" aria-selected="true">1か月の表</button>
+        <button type="button" class="tab" role="tab" id="タブ-記録" aria-controls="面-記録" aria-selected="false">記録の一覧</button>
+      </div>
+      <p class="muted small" id="読んだ時刻"></p>
+    </div>
 
-    <div class="card">
-      <h2>職員ごとの1か月</h2>
+    <div class="card" id="面-月" role="tabpanel" aria-labelledby="タブ-月">
+      <h2 class="sr">職員ごとの1か月</h2>
       <div class="row">
         <label for="月の職員" class="sr">見る人</label>
         <select id="月の職員" class="input"></select>
@@ -52,34 +58,15 @@
       <ul class="list" id="直した記録"></ul>
     </div>
 
-    <div class="card">
-      <h2>登録番号を出す</h2>
-      <p class="muted small">職員のスマホを登録する時に使います。番号は10分だけ、1回だけ使えます。</p>
-      <div class="row">
-        <label for="職員を選ぶ" class="sr">登録する人</label>
-        <select id="職員を選ぶ" class="input"></select>
-        <button type="button" class="btn" id="番号を出す">番号を出す</button>
-      </div>
-      <div class="codebox" id="番号の箱" hidden>
-        <span class="code" id="番号"></span>
-        <span id="番号の説明"></span>
-      </div>
-    </div>
-
-    <div class="card">
-      <h2>記録の一覧 <span class="muted small">新しい順・100件まで</span></h2>
+    <div class="card" id="面-記録" role="tabpanel" aria-labelledby="タブ-記録" hidden>
+      <h2 class="sr">記録の一覧</h2>
+      <p class="muted small">押された記録。新しい順・100件まで</p>
       <div class="scroll">
         <table>
           <thead><tr><th>日時</th><th>名前</th><th>種類</th></tr></thead>
           <tbody id="記録"></tbody>
         </table>
       </div>
-    </div>
-
-    <div class="card">
-      <h2>使える端末</h2>
-      <p class="muted small">機種を変えた時・なくした時は、古い端末を止めます。止めた端末は、もう押せなくなります。</p>
-      <div class="devices" id="端末"></div>
     </div>
   </section>
 

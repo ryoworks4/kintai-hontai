@@ -125,22 +125,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
 /* 代表の画面 */
 .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .row select { flex: 1 1 12em; width: auto; }
-.codebox { display: grid; gap: 4px; background: var(--accent-soft); border-radius: 10px; padding: 12px; }
-.codebox .code { font-family: var(--mono); font-size: 2rem; font-weight: 700; letter-spacing: .12em; color: var(--accent); }
 .scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
 table { border-collapse: collapse; width: 100%; font-size: .88rem; }
 th, td { padding: 7px 10px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; }
 tbody tr:last-child td { border-bottom: 0; }
 thead th { background: var(--surface2); font-weight: 700; }
-.devices { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
-.device {
-  display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between;
-  padding: 10px 12px; border-bottom: 1px solid var(--line);
-}
-.device:last-child { border-bottom: 0; }
-.device .who { font-weight: 700; }
-.device .act { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-left: auto; }
-.device .act .ask { font-size: .85rem; color: var(--ng); font-weight: 700; }
 .tag { display: inline-block; font-size: .78rem; font-weight: 700; padding: 1px 10px; border-radius: 999px; }
 .tag.in { background: var(--accent-soft); color: var(--accent); }
 .tag.out { background: var(--surface2); color: var(--muted); border: 1px solid var(--line); }
@@ -203,3 +192,10 @@ thead th { background: var(--surface2); font-weight: 700; }
 .fix-grid .stack { display: grid; gap: 4px; }
 .fix-grid .check { display: flex; align-items: center; gap: 6px; color: var(--ink); }
 .list .li.fix { grid-template-columns: 3.4em 1fr auto; }
+
+/* 代表の画面のタブ（2026-10-18） */
+.tabs-row { display: flex; align-items: center; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.tab { appearance: none; background: none; border: 0; border-bottom: 3px solid transparent; padding: 8px 14px; font-weight: 700; color: var(--muted); }
+.tab.on { color: var(--accent); border-bottom-color: var(--accent); }
+.tab:hover { color: var(--ink); }
