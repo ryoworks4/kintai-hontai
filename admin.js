@@ -384,6 +384,9 @@
       時刻.appendChild(字(d.出勤 ? その日の時分(d.出勤, d.日付) : '出勤なし', 直したか(d, '出勤'), d.出勤 ? '' : 'missing'));
       時刻.appendChild(document.createTextNode('〜'));
       時刻.appendChild(字(d.退勤 ? その日の時分(d.退勤, d.日付) : '退勤なし', 直したか(d, '退勤'), d.退勤 ? '' : 'missing'));
+      // 認めた押し忘れから入った打刻（段階3）
+      var 申請から = (d.申請から || []).filter(function (k) { return k === '出勤' || k === '退勤'; });
+      if (申請から.length) 時刻.appendChild(作る('span', { class: 'pill no', text: '申請から ' + 申請から.join('・') }));
     }
     tr.appendChild(時刻);
 
@@ -411,6 +414,8 @@
       // 配った勤務表で当番でない人の呼び出し。断っていないので印だけ（段階2 ⑪）
       if (n.当番でない && !n.数えない) 夜.appendChild(作る('span', { class: 'missing small', text: ' 当番でない' }));
     });
+    var 夜の申請 = (d.申請から || []).filter(function (k) { return k === '出発' || k === '帰着'; });
+    if (夜の申請.length) 夜.appendChild(作る('span', { class: 'pill no', text: '申請から ' + 夜の申請.join('・') }));
     tr.appendChild(夜);
 
     var 直す = 作る('button', { type: 'button', class: 'btn ghost small', text: 開いている直し === d.日付 ? '閉じる' : '直す' });
