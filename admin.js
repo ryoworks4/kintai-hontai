@@ -23,6 +23,7 @@
   var 変えている日 = {};        // 日付 → 認める・認めない を送っている間の判断
   var 判断し直す日 = {};        // 日付 → 「変える」を押した
   var 直している = false;
+  var 開いたまとまり = {};      // 記録の無い日のまとまりの最初の日付 → 開いている（人か月を変えたら閉じる）
 
   要素('番号を出す').addEventListener('click', 番号を出す);
   要素('月の職員').addEventListener('change', function () {
@@ -241,6 +242,7 @@
 
   function 月を消す() {
     月の中身 = null;
+    開いたまとまり = {};
     変えている日 = {};
     判断し直す日 = {};
     要素('合計').textContent = '';
@@ -301,11 +303,19 @@
       ]));
     }
 
+    // 記録の無い日が続く所は1行にまとめ、押すと開く（2026-10-18 矢作さん：月の大半が空の行で長い）
     var 表 = 要素('月の表');
     表.textContent = '';
-    中身.日.forEach(function (d) {
-      表.appendChild(行を作る(d));
-      if (開いている直し === d.日付) 表.appendChild(直す行を作る(d));
+    まとまりに分ける(中身.日).forEach(function (m) {
+      if (m.畳める) {
+        var 開いている = !!開いたまとまり[m.日[0].日付] || m.日.some(function (d) { return d.日付 === 開いている直し; });
+        表.appendChild(まとまりの行を作る(m.日, 開いている));
+        if (!開いている) return;
+      }
+      m.日.forEach(function (d) {
+        表.appendChild(行を作る(d));
+        if (開いている直し === d.日付) 表.appendChild(直す行を作る(d));
+      });
     });
 
     var 一覧 = 要素('直した記録');
@@ -319,6 +329,49 @@
       ]));
     });
     if (!中身.直した記録.length) 一覧.appendChild(作る('li', { class: 'li empty', text: 'この月に直した所はありません' }));
+  }
+
+  /** 記録の無い日：出勤・退勤・夜の呼び出しが無く、代表が直した欄も、重なり・確認の印も無い日 */
+  function 記録が無い日か(d) {
+    return !d.出勤 && !d.退勤 && !d.夜.length && !d.直した欄.length && !d.前後が重なる && !d.確認;
+  }
+
+  /** 日の並びを、記録の無い日が2日以上続く所（畳める）と、それ以外の1日ずつに分ける。1日だけの空きはまとめない */
+  function まとまりに分ける(日々) {
+    var 出 = [], 続き = [];
+    var 区切る = function () {
+      if (続き.length >= 2) 出.push({ 畳める: true, 日: 続き });
+      else 続き.forEach(function (d) { 出.push({ 畳める: false, 日: [d] }); });
+      続き = [];
+    };
+    日々.forEach(function (d) {
+      if (記録が無い日か(d)) { 続き.push(d); return; }
+      区切る();
+      出.push({ 畳める: false, 日: [d] });
+    });
+    区切る();
+    return 出;
+  }
+
+  /** まとまりの1行。押すと開く・畳む。開いたまま直している日があれば、畳む時に直す欄も閉じる */
+  function まとまりの行を作る(日々, 開いている) {
+    var 最初 = 日々[0].日付, 最後 = 日々[日々.length - 1].日付;
+    var b = 作る('button', {
+      type: 'button', class: 'fold-btn', 'aria-expanded': String(開いている),
+      text: (開いている ? '▾ ' : '▸ ') + 日付の表示(最初) + '〜' + 日付の表示(最後) + '　記録なし ' + 日々.length + '日　' +
+          (開いている ? '畳む' : '開く')
+    });
+    b.disabled = 直している;
+    b.addEventListener('click', function () {
+      if (開いている) {
+        delete 開いたまとまり[最初];
+        if (日々.some(function (d) { return d.日付 === 開いている直し; })) 開いている直し = '';
+      } else {
+        開いたまとまり[最初] = true;
+      }
+      月を描く();
+    });
+    return 作る('tr', { class: 'empty fold' }, [作る('td', { colspan: '8' }, [b])]);
   }
 
   function 欄の名前(欄) {

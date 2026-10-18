@@ -185,6 +185,10 @@ thead th { background: var(--surface2); font-weight: 700; }
 .month-table td.night { color: var(--night); }
 .month-table tr.wait td { background: var(--warn-soft); }
 .month-table tr.empty td { color: var(--muted); }
+.month-table tr.fold td { padding-block: 0; }
+.fold-btn { appearance: none; background: none; border: 0; width: 100%; text-align: left; padding: 8px 0; color: var(--muted); font-size: .9rem; }
+.fold-btn:hover { color: var(--ink); }
+.fold-btn:disabled { cursor: default; opacity: .6; }
 .month-table .acts { flex-wrap: nowrap; align-items: center; }
 .edited { color: var(--accent); font-weight: 700; }
 .missing { color: var(--ng); }
