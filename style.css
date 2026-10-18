@@ -199,3 +199,61 @@ thead th { background: var(--surface2); font-weight: 700; }
 .tab { appearance: none; background: none; border: 0; border-bottom: 3px solid transparent; padding: 8px 14px; font-weight: 700; color: var(--muted); }
 .tab.on { color: var(--accent); border-bottom-color: var(--accent); }
 .tab:hover { color: var(--ink); }
+
+/* 段階2：代表の勤務表（横に日付・縦に職員。上の行＝勤務、下の行＝当番） */
+.shift-table { font-size: .84rem; }
+.shift-table th, .shift-table td { text-align: center; padding: 3px 4px; border-right: 1px solid var(--line); white-space: nowrap; }
+.shift-table th:first-child, .shift-table td:first-child { text-align: left; position: sticky; left: 0; background: var(--surface); z-index: 1; min-width: 7em; }
+.shift-table thead th:first-child { background: var(--surface2); }
+.shift-table th .wd { display: block; font-size: .7rem; font-weight: 400; color: var(--muted); }
+.shift-table th.sat { color: var(--night); }
+.shift-table th.sun, .shift-table th.hol { color: var(--ng); }
+.shift-table th.short { background: var(--ng-soft); }
+.shift-table th.short .wd { color: var(--ng); font-weight: 700; }
+.shift-table tr.band td { border-top: 2px solid var(--line); }
+.shift-table td.name { font-weight: 700; white-space: normal; }
+.shift-table td.role { color: var(--muted); font-size: .76rem; }
+/* 集計。.sum は段階1の合計タイル（グリッド）なので使わない（同じ名前にするとセルが縦に伸びる） */
+.shift-table td.tally { font-family: var(--mono); font-variant-numeric: tabular-nums; background: var(--surface2); }
+.cell {
+  appearance: none; border: 1px solid transparent; border-radius: 6px; background: none; color: inherit;
+  min-width: 2.6em; min-height: 32px; padding: 2px 4px; font-size: .84rem; line-height: 1.2; display: inline-grid; gap: 0;
+}
+.cell:hover { border-color: var(--line); }
+.cell.off { background: var(--surface2); color: var(--muted); }
+.cell.hope { background: var(--warn-soft); color: var(--warn); font-weight: 700; }
+.cell.duty { background: var(--night-soft); color: var(--night); font-weight: 700; }
+.cell.picked { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.cell.changed { outline: 2px solid var(--warn); outline-offset: -2px; }
+.cell small { font-size: .66rem; font-weight: 400; color: var(--muted); }
+.cell[disabled] { cursor: default; }
+.editor { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--accent); border-radius: 10px; background: var(--surface2); }
+.editor .row { gap: 8px; }
+.editor .chips .chip { min-height: 36px; }
+.editor select { padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); }
+.tmp { display: inline-block; font-size: .7rem; font-weight: 700; padding: 0 7px; border-radius: 999px; background: var(--warn-soft); color: var(--warn); border: 1px solid var(--warn); vertical-align: 1px; }
+.list.small .li { grid-template-columns: 5.5em 1fr; font-size: .85rem; }
+
+/* 段階2：職員の下タブ（今日・勤務表・申請・記録）と「自分の勤務表」 */
+.page.with-tabs { padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)); }
+.bottom-tabs {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  background: var(--surface); border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.btab {
+  appearance: none; background: none; border: 0; border-top: 3px solid transparent;
+  padding: 10px 2px 8px; font-size: .8rem; font-weight: 700; color: var(--muted); min-height: 52px;
+}
+.btab.on { color: var(--accent); border-top-color: var(--accent); }
+.btab[disabled] { opacity: .45; cursor: default; }
+.list.shift .li { grid-template-columns: 4.6em 1fr auto; }
+.list.shift .li.off { background: var(--surface2); color: var(--muted); }
+.list.shift .li .d small { color: var(--muted); font-weight: 400; }
+.list.shift .li .d.sat { color: var(--night); }
+.list.shift .li .d.sun { color: var(--ng); }
+.tag { display: inline-block; font-size: .74rem; font-weight: 700; padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
+.tag.night { background: var(--night-soft); color: var(--night); }
+.tag.chg { background: var(--warn-soft); color: var(--warn); border: 1px solid var(--warn); }
+.tag.tmp { background: var(--warn-soft); color: var(--warn); }

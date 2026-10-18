@@ -21,7 +21,7 @@
   <span id="名前"></span>
 </header>
 
-<main class="page">
+<main class="page with-tabs">
   <div class="banner" id="知らせ" role="alert" hidden></div>
 
   <p class="loading" id="読み込み中">読み込んでいます…</p>
@@ -34,50 +34,76 @@
       <div class="acts" id="待ちのボタン"></div>
     </div>
 
-    <div class="card">
-      <h2>出勤・退勤</h2>
-      <div class="punch">
-        <button type="button" id="出勤">出勤<small id="出勤の時刻">押すと時刻が残る</small></button>
-        <button type="button" class="out" id="退勤">退勤<small id="退勤の時刻">—</small></button>
+    <div id="面-今日" role="tabpanel" aria-labelledby="タブ-今日">
+      <div class="card">
+        <h2>出勤・退勤</h2>
+        <div class="punch">
+          <button type="button" id="出勤">出勤<small id="出勤の時刻">押すと時刻が残る</small></button>
+          <button type="button" class="out" id="退勤">退勤<small id="退勤の時刻">—</small></button>
+        </div>
+        <p class="done" id="状態" role="status"></p>
       </div>
-      <p class="done" id="状態" role="status"></p>
+
+      <div class="card" id="日報" hidden>
+        <h2 id="日報の題">今日の日報</h2>
+        <div class="ask" id="理由を聞く" hidden>
+          <b id="理由の問い"></b>
+          <div class="chips" id="理由"></div>
+        </div>
+        <p class="muted small" id="日報の説明"></p>
+        <div class="stepper">
+          <span>休憩</span>
+          <button type="button" class="step" id="休憩を減らす" aria-label="休憩を15分減らす">−</button>
+          <b class="mono" id="休憩" aria-live="polite"></b>
+          <button type="button" class="step" id="休憩を増やす" aria-label="休憩を15分増やす">＋</button>
+        </div>
+        <div class="row">
+          <button type="button" class="btn" id="日報を送る">日報を送る</button>
+          <span class="muted small" id="日報の状態" role="status"></span>
+        </div>
+      </div>
+
+      <div class="card night" id="夜" hidden>
+        <h2>夜の呼び出し</h2>
+        <div class="punch">
+          <button type="button" id="出発">出発<small id="出発の時刻">—</small></button>
+          <button type="button" class="out" id="帰着">帰着<small id="帰着の時刻">—</small></button>
+        </div>
+        <p class="muted small">家を出て訪問する時だけ押します。電話だけの時は押しません。</p>
+      </div>
     </div>
 
-    <div class="card" id="日報" hidden>
-      <h2 id="日報の題">今日の日報</h2>
-      <div class="ask" id="理由を聞く" hidden>
-        <b id="理由の問い"></b>
-        <div class="chips" id="理由"></div>
-      </div>
-      <p class="muted small" id="日報の説明"></p>
-      <div class="stepper">
-        <span>休憩</span>
-        <button type="button" class="step" id="休憩を減らす" aria-label="休憩を15分減らす">−</button>
-        <b class="mono" id="休憩" aria-live="polite"></b>
-        <button type="button" class="step" id="休憩を増やす" aria-label="休憩を15分増やす">＋</button>
-      </div>
-      <div class="row">
-        <button type="button" class="btn" id="日報を送る">日報を送る</button>
-        <span class="muted small" id="日報の状態" role="status"></span>
+    <div id="面-勤務表" role="tabpanel" aria-labelledby="タブ-勤務表" hidden>
+      <div class="card">
+        <div class="month">
+          <button type="button" class="btn ghost small" id="勤務表の前の月" aria-label="前の月">‹</button>
+          <b id="勤務表の月の表示"></b>
+          <button type="button" class="btn ghost small" id="勤務表の次の月" aria-label="次の月">›</button>
+        </div>
+        <p class="muted small" id="勤務表の状態" role="status"></p>
+        <ul class="list shift" id="勤務表"></ul>
       </div>
     </div>
 
-    <div class="card night" id="夜" hidden>
-      <h2>夜の呼び出し</h2>
-      <div class="punch">
-        <button type="button" id="出発">出発<small id="出発の時刻">—</small></button>
-        <button type="button" class="out" id="帰着">帰着<small id="帰着の時刻">—</small></button>
-      </div>
-      <p class="muted small">家を出て訪問する時だけ押します。電話だけの時は押しません。</p>
+    <div id="面-申請" role="tabpanel" aria-labelledby="タブ-申請" hidden>
+      <div class="card"><h2>申請</h2><p class="muted">休みの希望や押し忘れの申請は、次の段階で使えるようになります。</p></div>
     </div>
 
-    <div class="card">
-      <h2>最近の記録</h2>
-      <ul class="list" id="記録"></ul>
+    <div id="面-記録" role="tabpanel" aria-labelledby="タブ-記録" hidden>
+      <div class="card">
+        <h2>最近の記録</h2>
+        <ul class="list" id="記録"></ul>
+      </div>
     </div>
 
     <p class="link" id="代表へ" hidden><a href="admin.html">代表の画面へ</a></p>
   </section>
 </main>
+<nav class="bottom-tabs" id="下タブ" aria-label="画面" hidden>
+  <button type="button" class="btab on" id="タブ-今日" aria-controls="面-今日" aria-selected="true">今日</button>
+  <button type="button" class="btab" id="タブ-勤務表" aria-controls="面-勤務表" aria-selected="false">勤務表</button>
+  <button type="button" class="btab" id="タブ-申請" aria-controls="面-申請" aria-selected="false">申請</button>
+  <button type="button" class="btab" id="タブ-記録" aria-controls="面-記録" aria-selected="false">記録</button>
+</nav>
 </body>
 </html>

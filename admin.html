@@ -29,6 +29,7 @@
     <div class="tabs-row">
       <div class="tabs" role="tablist" aria-label="見るもの">
         <button type="button" class="tab on" role="tab" id="タブ-月" aria-controls="面-月" aria-selected="true">1か月の表</button>
+        <button type="button" class="tab" role="tab" id="タブ-勤務表" aria-controls="面-勤務表" aria-selected="false">勤務表</button>
         <button type="button" class="tab" role="tab" id="タブ-記録" aria-controls="面-記録" aria-selected="false">記録の一覧</button>
       </div>
       <p class="muted small" id="読んだ時刻"></p>
@@ -56,6 +57,26 @@
       <p class="muted small">予定より15分以上長い日は、理由の横で認めるか決めます。認めた分だけ給与に入ります（認めなくても時間は残ります）。直した欄は緑です。</p>
       <h3 class="sub">直した記録</h3>
       <ul class="list" id="直した記録"></ul>
+    </div>
+
+    <div class="card" id="面-勤務表" role="tabpanel" aria-labelledby="タブ-勤務表" hidden>
+      <h2 class="sr">勤務表</h2>
+      <div class="row">
+        <div class="month">
+          <button type="button" class="btn ghost small" id="勤務表の前の月" aria-label="前の月">‹</button>
+          <b id="勤務表の月の表示"></b>
+          <button type="button" class="btn ghost small" id="勤務表の次の月" aria-label="次の月">›</button>
+        </div>
+        <span class="muted small" id="勤務表の状態" role="status"></span>
+        <div class="acts" id="勤務表の操作"></div>
+      </div>
+      <p class="muted small" id="勤務表の説明"></p>
+      <div class="scroll">
+        <table class="shift-table" id="勤務表" aria-label="勤務表"></table>
+      </div>
+      <div class="editor" id="マスの編集" hidden></div>
+      <ul class="list small" id="勤務表の不備" hidden></ul>
+      <p class="muted small" id="勤務表の凡例"></p>
     </div>
 
     <div class="card" id="面-記録" role="tabpanel" aria-labelledby="タブ-記録" hidden>

@@ -240,9 +240,12 @@ function 日の形か(d, 管理者向け) {
   return !!d && /^\d{4}-\d\d-\d\d$/.test(d.日付) && 時刻か(d.出勤) && 時刻か(d.退勤) &&
       typeof d.休憩分 === 'number' && 分か(d.働いた分) && 分か(d.差分) &&
       typeof d.理由 === 'string' && typeof d.理由が要る === 'boolean' &&
-      !!d.予定 && /^\d\d:\d\d$/.test(d.予定.始業) && /^\d\d:\d\d$/.test(d.予定.終業) &&
+      // 段階2: 休みの日（予定なし）は 始業・終業が空で 休み=true
+      !!d.予定 && typeof d.予定.休み === 'boolean' &&
+      (d.予定.休み ? d.予定.始業 === '' && d.予定.終業 === '' : /^\d\d:\d\d$/.test(d.予定.始業) && /^\d\d:\d\d$/.test(d.予定.終業)) &&
       Array.isArray(d.夜) && d.夜.every(function (n) {
-        return !!n && typeof n.出発ID === 'string' && 時刻か(n.出発) && 時刻か(n.帰着) && 分か(n.分) && typeof n.数えない === 'boolean';
+        return !!n && typeof n.出発ID === 'string' && 時刻か(n.出発) && 時刻か(n.帰着) && 分か(n.分) && typeof n.数えない === 'boolean' &&
+            typeof n.当番でない === 'boolean';
       }) &&
       (!管理者向け || (typeof d.確認 === 'string' && typeof d.給与へ分 === 'number' &&
           Array.isArray(d.直した欄) && d.直した欄.every(function (k) { return typeof k === 'string'; })));

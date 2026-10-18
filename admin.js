@@ -25,11 +25,24 @@
   var 直している = false;
   var 開いたまとまり = {};      // 記録の無い日のまとまりの最初の日付 → 開いている（人か月を変えたら閉じる）
 
+  // 段階2：勤務表（横に日付・縦に職員）
+  var 勤務表の月 = 今日の日付().slice(0, 7);
+  var 勤務表の中身 = null;      // 裏の「勤務表」の返事
+  var 勤務表を読む番 = 0;
+  var 勤務表を読んでいる = false;
+  var 選んだマス = null;        // { 職員ID, 日付, 欄 } 編集の欄を出しているマス
+  var 勤務表を送っている = '';  // '' / 'マス' / '作る' / '配る'
+  var 配るか聞いている = false;
+  var 当番の時刻 = '18:00';     // 途中交代の時刻（最後に選んだもの）
+
   // タブ。前に見ていたタブを覚えておく（この端末の中だけ）
-  ['月', '記録'].forEach(function (名) {
+  var タブの名前 = ['月', '勤務表', '記録'];
+  タブの名前.forEach(function (名) {
     要素('タブ-' + 名).addEventListener('click', function () { タブを選ぶ(名); });
   });
-  タブを選ぶ(取り出す('タブ') === '記録' ? '記録' : '月');
+  タブを選ぶ(タブの名前.indexOf(取り出す('タブ')) >= 0 ? 取り出す('タブ') : '月');
+  要素('勤務表の前の月').addEventListener('click', function () { 勤務表を動かす(-1); });
+  要素('勤務表の次の月').addEventListener('click', function () { 勤務表を動かす(1); });
   要素('月の職員').addEventListener('change', function () {
     しまう('月の職員', 要素('月の職員').value);
     月を読む();
@@ -53,6 +66,7 @@
     読み込む(false);
     // 直している途中・送っている途中は、表を読み直さない（入れかけた値が消えないように）
     if (!開いている直し && !直している && !Object.keys(変えている日).length) 月を読む();
+    if (勤務表の中身 && !勤務表を送っている && !選んだマス) 勤務表を読む();
   }
 
   /** 初めて = true の時だけ「読み込んでいます」を出す。2回目からは今の表示のまま裏で読み直す */
@@ -75,7 +89,10 @@
       知らせる(null);
       描く(結果.応答);
       画面を切り替える('本体');
-      if (初めて) 月を読む();
+      if (初めて) {
+        月を読む();
+        if (!要素('面-勤務表').hidden && !勤務表の中身 && !勤務表を読んでいる) 勤務表を読む();
+      }
     });
   }
 
@@ -96,13 +113,15 @@
   }
 
   function タブを選ぶ(名) {
-    ['月', '記録'].forEach(function (n) {
+    タブの名前.forEach(function (n) {
       var 選んだ = n === 名;
       要素('タブ-' + n).setAttribute('aria-selected', String(選んだ));
       要素('タブ-' + n).classList.toggle('on', 選んだ);
       要素('面-' + n).hidden = !選んだ;
     });
     しまう('タブ', 名);
+    // 勤務表は、開いた時に初めて読む（1か月の表と同時に読んで遅くしない）
+    if (名 === '勤務表' && 鍵 && !勤務表の中身 && !勤務表を読んでいる && !勤務表を送っている) 勤務表を読む();
   }
 
   function 描く(中身) {
@@ -366,6 +385,8 @@
     var 差 = 作る('td');
     if (d.前後が重なる) 差.appendChild(作る('span', { class: 'missing small', text: '前後の日と時刻が重なっています。直すまで合計に入れません' }));
     if (d.差分 !== null) {
+      // 勤務表で休みの日（予定なし）は、働いた時間が全部「差」（段階2 A）
+      if (d.予定.休み) 差.appendChild(作る('span', { class: 'muted small', text: '休みの日 ' }));
       差.appendChild(作る('b', { class: 'mono' + (d.理由が要る ? ' diff' : ' muted'), text: 差の表示(d.差分) }));
       if (d.理由が要る) 差.appendChild(字(' ' + (d.理由 || '理由なし'), 直したか(d, '理由'), d.理由 ? '' : 'muted'));
     }
@@ -378,6 +399,8 @@
       if (i) 夜.appendChild(作る('br'));
       var 文 = n.数えない ? '数えない' : その日の時分(n.出発, d.日付) + '→' + (n.帰着 ? その日の時分(n.帰着, d.日付) : '帰着なし');
       夜.appendChild(字(文, 直したか(d, '出発:' + n.出発ID) || 直したか(d, '帰着:' + n.出発ID), n.数えない ? 'muted' : ''));
+      // 配った勤務表で当番でない人の呼び出し。断っていないので印だけ（段階2 ⑪）
+      if (n.当番でない && !n.数えない) 夜.appendChild(作る('span', { class: 'missing small', text: ' 当番でない' }));
     });
     tr.appendChild(夜);
 
@@ -582,6 +605,341 @@
       }
       知らせる(null);
       月を読む();   // 合計と直した記録をそろえる
+    });
+  }
+
+  // ── 段階2：勤務表 ──────────────────────────────────────────
+  // 1マス＝1回の依頼（マスを変える）。押した瞬間に表示を変え、返事の勤務表の全部で描き直す。
+  // 見ていた値（元の値）を一緒に送るので、ほかの画面で先に変わっていれば裏が断り、読み直す ②
+
+  var 休みの区分 = ['休', '祝', '代', '夏', '年', '正'];
+  var 休み希望 = '希';
+
+  function 勤務表を動かす(n) {
+    var m = /^(\d{4})-(\d\d)$/.exec(勤務表の月);
+    勤務表の月 = new Date(Date.UTC(+m[1], +m[2] - 1 + n, 1)).toISOString().slice(0, 7);
+    選んだマス = null;
+    配るか聞いている = false;
+    勤務表を読む();
+  }
+
+  function 勤務表を読む() {
+    var 見る月 = 勤務表の月, 番 = ++勤務表を読む番;
+    var m = /^(\d{4})-(\d\d)$/.exec(見る月);
+    要素('勤務表の月の表示').textContent = m[1] + '年' + Number(m[2]) + '月';
+    if (!鍵) return;
+    // 月を変えたら前の表をすぐ消す（前の月のマスから送らない）
+    if (勤務表の中身 && 勤務表の中身.月 !== 見る月) { 勤務表の中身 = null; 選んだマス = null; 勤務表を描く(); }
+    要素('勤務表の状態').textContent = '読み込んでいます…';
+    勤務表を読んでいる = true;
+    送り直しつきで送る({ 操作: '勤務表', トークン: 鍵, 月: 見る月 }, function (r) { return 勤務表の形か(r, 見る月); }).then(function (結果) {
+      if (番 !== 勤務表を読む番) return;
+      勤務表を読んでいる = false;
+      if (!結果.届いた) {
+        要素('勤務表の状態').textContent = '読み込めませんでした。少し待ってから、月を選び直してください。';
+        return;
+      }
+      if (!結果.応答.ok) { 要素('勤務表の状態').textContent = ''; 断られた(結果.応答); return; }
+      勤務表を受け取る(結果.応答);
+    });
+  }
+
+  function 勤務表を受け取る(中身) {
+    勤務表の中身 = 中身;
+    // 選んでいたマスの人が表からいなくなっていたら閉じる
+    if (選んだマス && !勤務表の人(選んだマス.職員ID)) 選んだマス = null;
+    勤務表を描く();
+  }
+
+  function 勤務表の形か(r, 見る月) {
+    var 文字 = function (o, キー) { return !!o && キー.every(function (k) { return typeof o[k] === 'string'; }); };
+    var 数 = function (o, キー) { return !!o && キー.every(function (k) { return typeof o[k] === 'number'; }); };
+    return r.月 === 見る月 && ['', '作った', '配った'].indexOf(r.状態) >= 0 && typeof r.配った日時 === 'string' &&
+        Array.isArray(r.型) && r.型.every(function (t) { return 文字(t, ['型', '始業', '終業', '状態']) && 数(t, ['休憩分', '日数']); }) &&
+        !!r.祝日 && typeof r.祝日 === 'object' &&
+        Array.isArray(r.職員) && r.職員.every(function (p) {
+          return 文字(p, ['職員ID', '名前', '役割']) && Array.isArray(p.日) && p.日.length >= 28 &&
+              p.日.every(function (d) { return 文字(d, ['日付', '区分', '当番', '代休の元']) && typeof d.変わった === 'boolean' && d.日付.slice(0, 7) === 見る月; }) &&
+              数(p.集計, ['日数', '土日祝', '休', '当番', '代休の残り']);
+        }) &&
+        Array.isArray(r.足りない日) && r.足りない日.every(function (x) { return 文字(x, ['日付']) && Array.isArray(x.理由); }) &&
+        Array.isArray(r.不備) && r.不備.every(function (x) { return 文字(x, ['職員ID', '日付', '文']); });
+  }
+
+  function 勤務表の人(職員ID) {
+    return 勤務表の中身 ? 勤務表の中身.職員.filter(function (p) { return p.職員ID === 職員ID; })[0] || null : null;
+  }
+
+  function 勤務表のマス(職員ID, 日付) {
+    var p = 勤務表の人(職員ID);
+    return p ? p.日.filter(function (d) { return d.日付 === 日付; })[0] || null : null;
+  }
+
+  function 曜日(日付) { return new Date(日付 + 'T00:00:00Z').getUTCDay(); }
+  function 土日祝か(日付) { var w = 曜日(日付); return w === 0 || w === 6 || !!(勤務表の中身 && 勤務表の中身.祝日[日付]); }
+  function 働く区分か(区分) { return !!勤務表の中身 && 勤務表の中身.型.some(function (t) { return t.型 === 区分; }); }
+
+  function 勤務表を描く() {
+    var 中身 = 勤務表の中身;
+    var 表 = 要素('勤務表'), 操作 = 要素('勤務表の操作'), 状態 = 要素('勤務表の状態'), 説明 = 要素('勤務表の説明');
+    表.textContent = ''; 操作.textContent = '';
+    要素('勤務表の凡例').textContent = '';
+    要素('勤務表の不備').hidden = true;
+    要素('勤務表の不備').textContent = '';
+    エディタを描く();
+    if (!中身) return;
+
+    var 送っている = !!勤務表を送っている;
+    if (中身.状態 === '') {
+      状態.textContent = 'この月の勤務表は、まだありません。';
+      説明.textContent = '作ると、土日と休業日・祝日に「休」「夏」「正」「祝」が先に入ります。職員にはまだ見えません。';
+      var 作るb = 作る('button', { type: 'button', class: 'btn', text: 勤務表を送っている === '作る' ? '作っています…' : 'この月の勤務表を作る' });
+      作るb.disabled = 送っている;
+      作るb.addEventListener('click', 勤務表を作る);
+      操作.appendChild(作るb);
+    } else if (中身.状態 === '作った') {
+      状態.textContent = '下書き（職員にはまだ見えません）';
+      説明.textContent = 'マスを押して入れます。入れ終わったら「配る」を押すと、職員の画面に出ます。';
+      配るボタンを置く(操作, 送っている);
+    } else {
+      状態.textContent = 月日(中身.配った日時) + ' ' + 時分(中身.配った日時) + ' に配りました';
+      説明.textContent = '配った後も直せます。直したマスは職員の画面に「変わりました」と出ます。';
+    }
+
+    var 日付たち = 中身.職員.length ? 中身.職員[0].日.map(function (d) { return d.日付; }) : [];
+    var 足りない = {};
+    中身.足りない日.forEach(function (x) { 足りない[x.日付] = x.理由.join('・'); });
+
+    var 見出し = 作る('tr', {}, [作る('th', { text: 勤務表の月.slice(5).replace(/^0/, '') + '月' }), 作る('th', { text: '' })]);
+    日付たち.forEach(function (D) {
+      var w = 曜日(D), 祝 = 中身.祝日[D];
+      var th = 作る('th', { class: (w === 6 ? 'sat' : w === 0 ? 'sun' : 祝 ? 'hol' : '') + (足りない[D] ? ' short' : '') });
+      th.appendChild(作る('span', { text: String(Number(D.slice(8))) }));
+      th.appendChild(作る('span', { class: 'wd', text: 祝 ? '祝' : '日月火水木金土'[w] }));
+      if (足りない[D]) th.setAttribute('title', 足りない[D]);
+      見出し.appendChild(th);
+    });
+    [['日数', '(土日祝)'], ['休', ''], ['当番', ''], ['代休', 'の残り']].forEach(function (x) {
+      var th = 作る('th', {}, [作る('span', { text: x[0] })]);
+      if (x[1]) th.appendChild(作る('span', { class: 'wd', text: x[1] }));
+      見出し.appendChild(th);
+    });
+    表.appendChild(作る('thead', {}, [見出し]));
+
+    var 本体 = 作る('tbody');
+    中身.職員.forEach(function (p) {
+      var 勤務行 = 作る('tr', { class: 'band' }, [
+        作る('td', { class: 'name', rowspan: '2', text: p.名前 + (p.役割 === '管理者' ? '（代表）' : '') }),
+        作る('td', { class: 'role', text: '勤務' })
+      ]);
+      var 当番行 = 作る('tr', {}, [作る('td', { class: 'role', text: '当番' })]);
+      p.日.forEach(function (d) {
+        勤務行.appendChild(作る('td', {}, [マスのボタン(p, d, '区分')]));
+        当番行.appendChild(作る('td', {}, [マスのボタン(p, d, '当番')]));
+      });
+      var g = p.集計;
+      // 集計は勤務の行に。rowspan にすると勤務の行だけが縦に伸びる
+      [日数の表示(g.日数) + '(' + g.土日祝 + ')', String(g.休), String(g.当番), String(g.代休の残り)].forEach(function (s) {
+        勤務行.appendChild(作る('td', { class: 'tally', text: s }));
+        当番行.appendChild(作る('td', { class: 'tally' }));
+      });
+      本体.appendChild(勤務行);
+      本体.appendChild(当番行);
+    });
+    表.appendChild(本体);
+
+    要素('勤務表の凡例').textContent = (中身.状態 ? '赤い日付＝人の足りない日（当番がいない・2人以上・出勤がいない）。' : '') +
+        '枠がオレンジ＝配った後に変えたマス。' + 中身.型.filter(function (t) { return t.状態 === '仮'; }).map(function (t) {
+          return t.型 + ' の時間帯（' + 時刻の表示(t.始業) + '〜' + 時刻の表示(t.終業) + '）は仮です。';
+        }).join('');
+
+    if (中身.不備.length) {
+      var 一覧 = 要素('勤務表の不備');
+      一覧.hidden = false;
+      中身.不備.forEach(function (x) {
+        var 人 = 勤務表の人(x.職員ID);
+        一覧.appendChild(作る('li', { class: 'li' }, [
+          作る('span', { class: 'd', text: 月日(x.日付 + ' 00:00') }),
+          作る('span', { text: (人 ? 人.名前 : '') + '：' + x.文 })
+        ]));
+      });
+    }
+  }
+
+  function 日数の表示(n) { return String(n).replace(/\.0$/, ''); }
+  function 時刻の表示(t) { return t ? Number(t.slice(0, 2)) + t.slice(2) : ''; }
+
+  /** 1マスのボタン。押すと下に編集の欄が出る。送っている間と、まだ作っていない月は押せない */
+  function マスのボタン(p, d, 欄) {
+    var 値 = d[欄];
+    var 級 = 'cell';
+    if (欄 === '区分') {
+      if (休みの区分.indexOf(値) >= 0) 級 += ' off';
+      if (値 === 休み希望) 級 += ' hope';
+    } else if (値) 級 += ' duty';
+    if (選んだマス && 選んだマス.職員ID === p.職員ID && 選んだマス.日付 === d.日付 && 選んだマス.欄 === 欄) 級 += ' picked';
+    if (d.変わった) 級 += ' changed';
+    var b = 作る('button', { type: 'button', class: 級, id: 'マス-' + p.職員ID + '-' + d.日付 + '-' + 欄,
+      'aria-label': p.名前 + ' ' + 日付の表示(d.日付) + ' ' + 欄 });
+    var m = /^(\d\d:\d\d)(から|まで)$/.exec(値);
+    if (m) { b.appendChild(作る('span', { text: 時刻の表示(m[1]) })); b.appendChild(作る('small', { text: m[2] })); }
+    else b.appendChild(作る('span', { text: 値 || (欄 === '区分' ? '　' : '') }));
+    if (欄 === '区分' && 値 === '代') b.appendChild(作る('small', { text: d.代休の元 ? '←' + 月日(d.代休の元 + ' 00:00') : '元なし' }));
+    b.disabled = !勤務表の中身 || !勤務表の中身.状態 || !!勤務表を送っている;
+    b.addEventListener('click', function () {
+      var 同じ = 選んだマス && 選んだマス.職員ID === p.職員ID && 選んだマス.日付 === d.日付 && 選んだマス.欄 === 欄;
+      選んだマス = 同じ ? null : { 職員ID: p.職員ID, 日付: d.日付, 欄: 欄 };
+      配るか聞いている = false;
+      勤務表を描く();
+    });
+    return b;
+  }
+
+  /** 選んだマスの編集の欄。区分＝型と休みの区分のチップ、当番＝なし・○・まで・から、代＝元の出勤日 */
+  function エディタを描く() {
+    var 枠 = 要素('マスの編集');
+    枠.textContent = '';
+    var マス = 選んだマス && 勤務表のマス(選んだマス.職員ID, 選んだマス.日付);
+    枠.hidden = !マス;
+    if (!マス) return;
+    var 人 = 勤務表の人(選んだマス.職員ID), 欄 = 選んだマス.欄, 送っている = !!勤務表を送っている;
+    var 頭 = 作る('div', { class: 'row' }, [
+      作る('b', { text: 人.名前 + '　' + 日付の表示(マス.日付) + '　' + (欄 === '区分' ? '勤務' : '当番') }),
+      作る('span', { class: 'muted small', id: 'マスの状態', text: 送っている ? '送っています…' : '' })
+    ]);
+    var 閉じる = 作る('button', { type: 'button', class: 'btn ghost small', text: '閉じる' });
+    閉じる.addEventListener('click', function () { 選んだマス = null; 勤務表を描く(); });
+    頭.appendChild(閉じる);
+    枠.appendChild(頭);
+
+    var チップ = 作る('div', { class: 'chips' });
+    var 置く = function (表示, 値, 仮) {
+      var b = 作る('button', { type: 'button', class: 'chip' + (マス[欄] === 値 ? ' on' : ''), text: 表示, 'aria-pressed': String(マス[欄] === 値) });
+      if (仮) b.appendChild(作る('span', { class: 'tmp', text: '仮' }));
+      b.disabled = 送っている;
+      b.addEventListener('click', function () { マスを送る(選んだマス, 欄, 値); });
+      チップ.appendChild(b);
+    };
+    if (欄 === '区分') {
+      勤務表の中身.型.forEach(function (t) {
+        置く(t.型 + ' ' + 時刻の表示(t.始業) + '〜' + 時刻の表示(t.終業), t.型, t.状態 === '仮');
+      });
+      [['休', '休'], ['祝', '祝'], ['代 代休', '代'], ['夏 夏季', '夏'], ['年 有給', '年'], ['正 年末年始', '正'], ['希 休み希望', 休み希望]].forEach(function (x) { 置く(x[0], x[1]); });
+      置く('なし', '');
+    } else {
+      置く('なし', '');
+      置く('○ 通して持つ', '○');
+      置く(時刻の表示(当番の時刻) + 'まで（渡す側）', 当番の時刻 + 'まで');
+      置く(時刻の表示(当番の時刻) + 'から（夜を持つ側）', 当番の時刻 + 'から');
+    }
+    枠.appendChild(チップ);
+
+    if (欄 === '当番') {
+      var 時刻 = 作る('select', { id: '交代の時刻', 'aria-label': '途中交代の時刻' });
+      for (var h = 12; h < 24; h++) {
+        ['00', '15', '30', '45'].forEach(function (mm) {
+          var v = ('0' + h).slice(-2) + ':' + mm;
+          var o = 作る('option', { value: v, text: h + ':' + mm });
+          if (v === 当番の時刻) o.selected = true;
+          時刻.appendChild(o);
+        });
+      }
+      時刻.disabled = 送っている;
+      時刻.addEventListener('change', function () { 当番の時刻 = 時刻.value; エディタを描く(); });
+      枠.appendChild(作る('label', { class: 'row small muted' }, [作る('span', { text: '途中交代の時刻' }), 時刻]));
+      枠.appendChild(作る('p', { class: 'muted small', text: 'オンコール手当は、夜を通して持つ「○」と「から」の人に付きます。' }));
+    }
+
+    if (欄 === '区分' && マス.区分 === '代') {
+      var 元 = 作る('select', { id: '代休の元', 'aria-label': '代休の元になった出勤日' });
+      元.appendChild(作る('option', { value: '', text: '元の出勤日を選ぶ' }));
+      var 候補 = 人.日.filter(function (d) { return 働く区分か(d.区分) && 土日祝か(d.日付); }).map(function (d) { return d.日付; });
+      if (マス.代休の元 && 候補.indexOf(マス.代休の元) < 0) 候補.push(マス.代休の元);
+      候補.forEach(function (D) {
+        var o = 作る('option', { value: D, text: 日付の表示(D) });
+        if (D === マス.代休の元) o.selected = true;
+        元.appendChild(o);
+      });
+      元.disabled = 送っている;
+      元.addEventListener('change', function () { マスを送る(選んだマス, '代休の元', 元.value); });
+      枠.appendChild(作る('label', { class: 'row small muted' }, [作る('span', { text: '代休の元（土日祝の出勤日）' }), 元]));
+    }
+  }
+
+  /** 1マスを送る。見ていた値を元の値として送る ②。押した瞬間に表示を変え、返事の勤務表で描き直す */
+  function マスを送る(どこ, 欄, 新しい値) {
+    var マス = 勤務表のマス(どこ.職員ID, どこ.日付);
+    if (!マス || 勤務表を送っている) return;
+    var 元の値 = マス[欄];
+    if (元の値 === 新しい値) return;
+    var 見る月 = 勤務表の月;
+    勤務表を送っている = 'マス';
+    マス[欄] = 新しい値;   // 押した瞬間に変える。正しい値は返事で来る
+    勤務表を描く();
+    送り直しつきで送る({ 操作: 'マスを変える', トークン: 鍵, 操作ID: 新しい操作ID(), 職員ID: どこ.職員ID, 日付: どこ.日付,
+      欄: 欄, 元の値: 元の値, 新しい値: 新しい値 }, function (r) { return 勤務表の形か(r, 見る月); }).then(function (結果) {
+      勤務表を送っている = '';
+      if (!結果.届いた) {
+        知らせる('送れたか分かりませんでした。表を読み直します。');
+        勤務表を読む();
+        return;
+      }
+      if (!結果.応答.ok) {
+        断られた(結果.応答);
+        勤務表を読む();   // 「変わった」なら、ほかの画面の値で描き直す
+        return;
+      }
+      if (勤務表の月 !== 見る月) return;
+      勤務表を受け取る(結果.応答);
+    });
+  }
+
+  function 勤務表を作る() {
+    if (勤務表を送っている || !勤務表の中身 || 勤務表の中身.状態) return;
+    var 見る月 = 勤務表の月;
+    勤務表を送っている = '作る';
+    勤務表を描く();
+    送り直しつきで送る({ 操作: '勤務表を作る', トークン: 鍵, 操作ID: 新しい操作ID(), 月: 見る月 },
+        function (r) { return 勤務表の形か(r, 見る月); }).then(function (結果) {
+      勤務表を送っている = '';
+      if (!結果.届いた) { 知らせる('作れたか分かりませんでした。表を読み直します。'); 勤務表を読む(); return; }
+      if (!結果.応答.ok) { 断られた(結果.応答); 勤務表を読む(); return; }
+      if (勤務表の月 !== 見る月) return;
+      勤務表を受け取る(結果.応答);
+    });
+  }
+
+  /** 配る → その場で「職員に見えるようになります。配りますか？」を出してから送る */
+  function 配るボタンを置く(枠, 送っている) {
+    if (配るか聞いている) {
+      var はい = 作る('button', { type: 'button', class: 'btn small', text: '配る' });
+      var いいえ = 作る('button', { type: 'button', class: 'btn ghost small', text: 'やめる' });
+      はい.addEventListener('click', 配る);
+      いいえ.addEventListener('click', function () { 配るか聞いている = false; 勤務表を描く(); });
+      枠.appendChild(作る('span', { class: 'small', text: '職員に見えるようになります。配りますか？' }));
+      枠.appendChild(はい);
+      枠.appendChild(いいえ);
+      return;
+    }
+    var b = 作る('button', { type: 'button', class: 'btn', text: 勤務表を送っている === '配る' ? '配っています…' : '配る' });
+    b.disabled = 送っている;
+    b.addEventListener('click', function () { 配るか聞いている = true; 選んだマス = null; 勤務表を描く(); });
+    枠.appendChild(b);
+  }
+
+  function 配る() {
+    if (勤務表を送っている || !勤務表の中身 || 勤務表の中身.状態 !== '作った') return;
+    var 見る月 = 勤務表の月;
+    配るか聞いている = false;
+    勤務表を送っている = '配る';
+    勤務表を描く();
+    送り直しつきで送る({ 操作: '配る', トークン: 鍵, 操作ID: 新しい操作ID(), 月: 見る月 },
+        function (r) { return 勤務表の形か(r, 見る月); }).then(function (結果) {
+      勤務表を送っている = '';
+      if (!結果.届いた) { 知らせる('配れたか分かりませんでした。表を読み直します。'); 勤務表を読む(); return; }
+      if (!結果.応答.ok) { 断られた(結果.応答); 勤務表を読む(); return; }
+      if (勤務表の月 !== 見る月) return;
+      勤務表を受け取る(結果.応答);
     });
   }
 })();
