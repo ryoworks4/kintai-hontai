@@ -215,7 +215,11 @@
     });
   }
 
-  /** 新しい申請。1 種類 → 2 日付 → 3 内容（休みの種類 か 打刻の種類と時刻）→ 4 理由 → 5 確認して送る。答えた所まで出す */
+  /**
+   * 新しい申請。1 種類 → 2 日付 → 3 内容（休みの種類 か 打刻の種類と時刻）→ 4 理由 → 5 確認して送る。答えた所まで出す。
+   * 日付・時刻の欄を変えた時は、その欄より下だけを描き直す。欄ごと作り直すと、スマホで開いたばかりの日付・時刻の選択が
+   * 閉じてしまう（空の欄を開くと、ブラウザが先に今日を入れて change を出すため。2026-10-18 矢作さん）
+   */
   function 手順を描く() {
     var 枠 = 要素('申請の手順');
     枠.textContent = '';
@@ -241,42 +245,53 @@
     else { 日付.setAttribute('min', 日を足す(今日, -日数)); 日付.setAttribute('max', 今日); }
     日付.value = d.日付;
     日付.disabled = 送信中;
-    日付.addEventListener('change', function () { d.日付 = 日付.value; 申請を描く(); });
+    var 三から下 = 作る('div', { class: 'wiz' });
+    日付.addEventListener('change', function () { d.日付 = 日付.value; 三から描く(); });
     枠.appendChild(問い(2, [作る('div', { class: 'row' }, [作る('span', { class: 'muted small', text: d.種類 === '休み' ? '休みたい日（明日以降）' : '押し忘れた日（' + 日数 + '日以内）' }), 日付])]));
-    if (!日付の正しさ(d, 今日, 日数)) return;
+    枠.appendChild(三から下);
+    三から描く();
 
-    if (d.種類 === '休み') {
-      枠.appendChild(問い(3, [チップ列(['公休', '有給'], d.内容, function (c) { d.内容 = c; 申請を描く(); })]));
-      if (!d.内容) return;
-    } else {
-      var 時刻 = 作る('input', { type: 'time', class: 'input narrow', id: '申請の時刻' });
-      時刻.value = d.時刻;
-      時刻.disabled = 送信中;
-      時刻.addEventListener('change', function () { d.時刻 = 時刻.value; 申請を描く(); });
-      var 翌日 = 作る('button', { type: 'button', class: 'chip' + (d.翌日 ? ' on' : ''), text: '翌日の時刻', 'aria-pressed': String(d.翌日) });
-      翌日.disabled = 送信中;
-      翌日.addEventListener('click', function () { d.翌日 = !d.翌日; 申請を描く(); });
-      var 行 = [作る('span', { class: 'muted small', text: '押し忘れた時刻' }), 時刻];
-      if (d.内容 === '退勤' || d.内容 === '帰着') 行.push(翌日);
-      枠.appendChild(問い(3, [チップ列(['出勤', '退勤', '出発', '帰着'], d.内容, function (c) { d.内容 = c; d.翌日 = false; 申請を描く(); }),
-        d.内容 ? 作る('div', { class: 'row' }, 行) : null]));
-      if (!d.内容 || !/^\d\d:\d\d$/.test(d.時刻)) return;
+    function 三から描く() {
+      三から下.textContent = '';
+      if (!日付の正しさ(d, 今日, 日数)) return;
+      var 四から下 = 作る('div', { class: 'wiz' });
+      if (d.種類 === '休み') {
+        三から下.appendChild(問い(3, [チップ列(['公休', '有給'], d.内容, function (c) { d.内容 = c; 三から描く(); })]));
+      } else {
+        var 時刻 = 作る('input', { type: 'time', class: 'input narrow', id: '申請の時刻' });
+        時刻.value = d.時刻;
+        時刻.disabled = 送信中;
+        時刻.addEventListener('change', function () { d.時刻 = 時刻.value; 四から描く(四から下); });
+        var 翌日 = 作る('button', { type: 'button', class: 'chip' + (d.翌日 ? ' on' : ''), text: '翌日の時刻', 'aria-pressed': String(d.翌日) });
+        翌日.disabled = 送信中;
+        翌日.addEventListener('click', function () { d.翌日 = !d.翌日; 三から描く(); });
+        var 行 = [作る('span', { class: 'muted small', text: '押し忘れた時刻' }), 時刻];
+        if (d.内容 === '退勤' || d.内容 === '帰着') 行.push(翌日);
+        三から下.appendChild(問い(3, [チップ列(['出勤', '退勤', '出発', '帰着'], d.内容, function (c) { d.内容 = c; d.翌日 = false; 三から描く(); }),
+          d.内容 ? 作る('div', { class: 'row' }, 行) : null]));
+      }
+      三から下.appendChild(四から下);
+      四から描く(四から下);
     }
 
-    var 理由 = 作る('input', { type: 'text', class: 'input', id: '申請の理由', maxlength: '30', placeholder: 'なくてもよい' });
-    理由.value = d.理由;
-    理由.disabled = 送信中;
-    理由.addEventListener('input', function () { d.理由 = 理由.value; });
-    枠.appendChild(問い(4, [作る('span', { class: 'muted small', text: '理由（30文字まで）' }), 理由]));
+    function 四から描く(箱) {
+      箱.textContent = '';
+      if (d.種類 === '休み' ? !d.内容 : (!d.内容 || !/^\d\d:\d\d$/.test(d.時刻))) return;
+      var 理由 = 作る('input', { type: 'text', class: 'input', id: '申請の理由', maxlength: '30', placeholder: 'なくてもよい' });
+      理由.value = d.理由;
+      理由.disabled = 送信中;
+      理由.addEventListener('input', function () { d.理由 = 理由.value; });
+      箱.appendChild(問い(4, [作る('span', { class: 'muted small', text: '理由（30文字まで）' }), 理由]));
 
-    var 確認 = 作る('div', { class: 'confirm' }, [
-      作る('b', { text: 日付の表示(d.日付) + '　' + 申請の文({ 種類: d.種類, 内容: d.内容, 時刻: 申請の時刻(d), 日付: d.日付 }) }),
-      作る('span', { class: 'small', text: d.種類 === '休み' ? '代表が認めると、勤務表に入ります。' : '代表が認めると、その時刻に押したことになります。' })
-    ]);
-    var 送る = 作る('button', { type: 'button', class: 'btn big', id: '申請を送る', text: 送信中 ? '送っています…' : 'この内容で送る' });
-    送る.disabled = 送信中;
-    送る.addEventListener('click', 申請を送る);
-    枠.appendChild(問い(5, [確認, 送る]));
+      var 確認 = 作る('div', { class: 'confirm' }, [
+        作る('b', { text: 日付の表示(d.日付) + '　' + 申請の文({ 種類: d.種類, 内容: d.内容, 時刻: 申請の時刻(d), 日付: d.日付 }) }),
+        作る('span', { class: 'small', text: d.種類 === '休み' ? '代表が認めると、勤務表に入ります。' : '代表が認めると、その時刻に押したことになります。' })
+      ]);
+      var 送る = 作る('button', { type: 'button', class: 'btn big', id: '申請を送る', text: 送信中 ? '送っています…' : 'この内容で送る' });
+      送る.disabled = 送信中;
+      送る.addEventListener('click', 申請を送る);
+      箱.appendChild(問い(5, [確認, 送る]));
+    }
   }
 
   function 日付の正しさ(d, 今日, 日数) {
