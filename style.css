@@ -227,6 +227,15 @@ thead th { background: var(--surface2); font-weight: 700; }
 .cell.changed { outline: 2px solid var(--warn); outline-offset: -2px; }
 .cell small { font-size: .66rem; font-weight: 400; color: var(--muted); }
 .cell[disabled] { cursor: default; }
+.cell.other { opacity: .35; }
+/* 勤務表：表の上の「入れるもの」（続けて入れる形・2026-11-21） */
+.palette { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.palette.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.palette .row { gap: 6px; }
+.palette .lbl { font-size: .8rem; font-weight: 700; color: var(--muted); min-width: 2.6em; }
+.palette .chip.duty { border-color: var(--night); color: var(--night); }
+.palette .chip.duty.on { background: var(--night); border-color: var(--night); color: var(--surface); }
+.palette .now { flex: 1 1 18em; font-size: .86rem; color: var(--muted); }
 .editor { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--accent); border-radius: 10px; background: var(--surface2); }
 .editor .row { gap: 8px; }
 .editor .chips .chip { min-height: 36px; }
