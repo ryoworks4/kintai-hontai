@@ -568,7 +568,7 @@
     });
 
     var なぜ = 作る('input', { id: id('なぜ'), type: 'text', class: 'input', maxlength: '100', placeholder: '例: 押し忘れ' });
-    置く('なぜ直すか（残ります）', 'なぜ', [なぜ]);
+    置く('直す理由（残ります）', 'なぜ', [なぜ]);
 
     var 返事 = 作る('p', { class: 'reply', role: 'status' });
     var 送る = 作る('button', { type: 'submit', class: 'btn', text: '直す' });
@@ -1037,7 +1037,7 @@
     if (!中身) return;
     要素('申請の状態').textContent = 中身.申請.length ? '' : 'まだ申請はありません。';
     if (!中身.申請.length) return;
-    表.appendChild(作る('thead', {}, [作る('tr', {}, ['送った日', 'だれ', '申請', '勤務表では', '理由', ''].map(function (s) { return 作る('th', { text: s }); }))]));
+    表.appendChild(作る('thead', {}, [作る('tr', {}, ['送った日', '名前', '内容', '今の勤務表', '理由', ''].map(function (s) { return 作る('th', { text: s }); }))]));
     var 本体 = 作る('tbody');
     中身.申請.forEach(function (x) {
       var tr = 作る('tr', { class: x.状態 === '確認待ち' ? 'wait' : '' });
