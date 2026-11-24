@@ -12,13 +12,17 @@
 <meta name="apple-mobile-web-app-title" content="出勤・退勤">
 <title>出勤・退勤</title>
 <link rel="stylesheet" href="style.css">
+<script src="help.js" defer></script>
 <script src="common.js" defer></script>
 <script src="staff.js" defer></script>
 </head>
-<body>
+<body class="has-tabs">
 <header class="top">
-  <span class="date" id="今日"></span>
-  <span id="名前"></span>
+  <div class="who">
+    <span class="date" id="今日"></span>
+    <span id="名前"></span>
+  </div>
+  <button type="button" class="help-btn" id="使い方を開く" aria-controls="使い方" aria-expanded="false" hidden>？ 使い方</button>
 </header>
 
 <main class="page with-tabs">
@@ -113,5 +117,15 @@
   <button type="button" class="btab" id="タブ-申請" aria-controls="面-申請" aria-selected="false">申請</button>
   <button type="button" class="btab" id="タブ-記録" aria-controls="面-記録" aria-selected="false">記録</button>
 </nav>
+
+<aside class="help sheet" id="使い方" aria-labelledby="使い方の題" hidden>
+  <div class="help-head">
+    <h2 id="使い方の題">使い方</h2>
+    <button type="button" class="x" id="使い方を小さく" aria-label="小さくする">⌄</button>
+    <button type="button" class="x" id="使い方を閉じる" aria-label="閉じる">×</button>
+  </div>
+  <p class="help-note" id="使い方の知らせ" role="status" hidden></p>
+  <div class="help-body" id="使い方の中身"></div>
+</aside>
 </body>
 </html>

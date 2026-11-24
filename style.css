@@ -45,12 +45,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
 .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
-/* 上の帯 */
+/* 上の帯（左に日付・名前、右に「？ 使い方」） */
 .top {
-  display: grid; gap: 2px;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
   padding: calc(14px + env(safe-area-inset-top, 0px)) 16px 12px;
   background: var(--accent); color: var(--accent-ink);
 }
+.top .who { display: grid; gap: 2px; min-width: 0; }
 .top .date { font-size: 1.15rem; font-weight: 700; }
 
 .page {
@@ -303,3 +304,73 @@ thead th { background: var(--surface2); font-weight: 700; }
 .pay-table tr.total-row td { border-top: 2px solid var(--ink); font-weight: 700; }
 .name-btn { appearance: none; background: none; border: 0; padding: 4px 0; color: var(--accent); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; text-align: left; }
 .name-btn[aria-pressed="true"] { color: var(--ink); text-decoration: none; }
+
+/* 「？ 使い方」（2026-11-24・見本 2026-11-19）。説明は操作する画面と重ねない：
+   広い画面は右に並べて本体を縮める（help-side）／狭い画面は下半分に出し、本体の下に同じ高さの余白を足す（help-sheet） */
+:root { --help-w: 380px; --help-h: min(46vh, 420px); --tabs-h: calc(53px + env(safe-area-inset-bottom, 0px)); }
+.help-btn {
+  flex: none; border: 0; border-radius: 999px; background: var(--surface); color: var(--accent);
+  font-weight: 700; padding: 6px 14px; min-height: 40px; white-space: nowrap;
+}
+.help-btn[aria-expanded="true"] { box-shadow: inset 0 0 0 2px var(--accent); }
+a.btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+.help { position: fixed; z-index: 10; background: var(--surface); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.help.side { top: 0; right: 0; bottom: 0; width: var(--help-w); border-left: 1px solid var(--line); }
+.help.sheet {
+  left: 0; right: 0; bottom: 0; height: var(--help-h); padding-bottom: env(safe-area-inset-bottom, 0px);
+  border-top: 1px solid var(--line); border-radius: 16px 16px 0 0; box-shadow: 0 -6px 18px rgba(20, 30, 24, .18);
+}
+body.has-tabs .help.sheet { bottom: var(--tabs-h); padding-bottom: 0; }
+.help.sheet.mini { height: auto; }
+body.help-side { padding-right: var(--help-w); }
+body.help-side .bottom-tabs { right: var(--help-w); }
+body.help-sheet .page { padding-bottom: calc(var(--help-h) + 24px); }
+body.help-sheet .page.with-tabs { padding-bottom: calc(var(--help-h) + var(--tabs-h) + 24px); }
+body.help-mini .page.with-tabs { padding-bottom: calc(var(--tabs-h) + 84px); }
+.help-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px 10px 16px; border-bottom: 1px solid var(--line); }
+.help-head h2 { margin-right: auto; min-width: 0; font-size: 1.02rem; }
+.help .x { flex: none; border: 1px solid var(--line); background: var(--surface2); border-radius: 8px; min-width: 40px; min-height: 40px; font-weight: 700; }
+.help-note { margin: 10px 16px 0; padding: 6px 10px; border-radius: 8px; background: var(--warn-soft); color: var(--warn); font-size: .88rem; }
+.help-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 12px 16px 18px; display: grid; gap: 14px; align-content: start; }
+.help.mini .help-body, .help.mini .help-note { display: none; }
+.help-lead { display: grid; gap: 2px; }
+.help .lead { font-size: 1.06rem; font-weight: 700; line-height: 1.5; }
+.help-steps { list-style: none; margin: 0; padding: 0; display: grid; }
+.help-steps li { position: relative; display: grid; grid-template-columns: 30px 1fr; gap: 10px; padding-bottom: 14px; }
+.help-steps li:last-child { padding-bottom: 0; }
+.help-steps li:not(:last-child)::before { content: ""; position: absolute; left: 14px; top: 30px; bottom: 2px; width: 2px; background: var(--line); }
+.help-steps .no { width: 30px; height: 30px; border-radius: 999px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); font-weight: 700; font-family: var(--mono); }
+.help-steps .st { display: grid; gap: 3px; padding-top: 3px; min-width: 0; }
+.help-steps .res { font-size: .9rem; color: var(--accent); font-weight: 700; }
+.help-steps .res::before { content: "→ "; }
+.help-steps .hint { font-size: .86rem; color: var(--muted); }
+.kbtn {
+  display: inline-block; margin: 1px 2px; padding: 0 8px; border: 0; border-radius: 6px;
+  background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: .86rem; line-height: 1.7; white-space: nowrap;
+}
+.kbtn:hover { box-shadow: 0 0 0 2px var(--accent-soft); }
+.faq-box { display: grid; gap: 6px; }
+.faq-title { font-size: .84rem; font-weight: 700; color: var(--muted); }
+.faq { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.faq details { border-bottom: 1px solid var(--line); }
+.faq details:last-child { border-bottom: 0; }
+.faq summary { list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 12px; font-size: .94rem; font-weight: 700; cursor: pointer; }
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after { content: "＋"; color: var(--accent); font-weight: 700; flex: none; }
+.faq details[open] summary::after { content: "−"; }
+.faq details[open] summary { color: var(--accent); }
+.faq .ans { padding: 0 12px 11px; display: grid; gap: 4px; font-size: .92rem; line-height: 1.7; }
+details.common { border: 1px solid var(--line); border-radius: 10px; background: var(--surface2); }
+details.common > summary { padding: 9px 12px; font-weight: 700; font-size: .9rem; cursor: pointer; }
+details.common .in { padding: 0 12px 12px; display: grid; gap: 10px; }
+.help .blk { display: grid; gap: 1px; }
+.help .bh { font-size: .84rem; font-weight: 700; color: var(--muted); }
+.help .bt { font-size: .92rem; }
+.help .legend { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.help .key { display: inline-flex; align-items: center; gap: 4px; font-size: .86rem; padding: 1px 8px 1px 2px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); }
+.help .key b { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 999px; background: var(--surface2); }
+/* 説明の緑のボタンを押した時、画面の本物のボタンを光らせる */
+.pointing { outline: 3px solid var(--warn) !important; outline-offset: 3px; animation: help-blink .9s ease-in-out 3; }
+body.help-sheet .pointing { scroll-margin-top: 18vh; }
+@keyframes help-blink { 50% { outline-color: transparent; } }
+@media (prefers-reduced-motion: reduce) { .pointing { animation: none; } }

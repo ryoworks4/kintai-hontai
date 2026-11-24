@@ -9,13 +9,17 @@
 <meta name="theme-color" content="#2e6a4c">
 <title>代表の画面</title>
 <link rel="stylesheet" href="style.css">
+<script src="help.js" defer></script>
 <script src="common.js" defer></script>
 <script src="admin.js" defer></script>
 </head>
 <body>
 <header class="top">
-  <span class="date">代表の画面</span>
-  <span id="名前"></span>
+  <div class="who">
+    <span class="date">代表の画面</span>
+    <span id="名前"></span>
+  </div>
+  <button type="button" class="help-btn" id="使い方を開く" aria-controls="使い方" aria-expanded="false" hidden>？ 使い方</button>
 </header>
 
 <main class="page wide">
@@ -24,6 +28,12 @@
   <p class="loading" id="読み込み中">読み込んでいます…</p>
 
   <section id="登録" hidden></section>
+
+  <section class="card" id="スマホでは" hidden>
+    <h2>代表の画面はパソコンで開きます</h2>
+    <p>スマホでは、出勤・退勤の画面を使います。</p>
+    <a class="btn big" href="index.html">出勤・退勤の画面へ</a>
+  </section>
 
   <section id="本体" hidden>
     <div class="tabs-row">
@@ -128,5 +138,15 @@
 
   <p class="link" id="職員の画面へ"><a href="index.html">出勤・退勤の画面へ</a></p>
 </main>
+
+<aside class="help side" id="使い方" aria-labelledby="使い方の題" hidden>
+  <div class="help-head">
+    <h2 id="使い方の題">使い方</h2>
+    <button type="button" class="x" id="使い方を小さく" aria-label="小さくする">⌄</button>
+    <button type="button" class="x" id="使い方を閉じる" aria-label="閉じる">×</button>
+  </div>
+  <p class="help-note" id="使い方の知らせ" role="status" hidden></p>
+  <div class="help-body" id="使い方の中身"></div>
+</aside>
 </body>
 </html>

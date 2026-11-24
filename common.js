@@ -143,6 +143,12 @@ function 画面を切り替える(見せる) {
     var el = 要素(id);
     if (el) el.hidden = id !== 見せる;
   });
+  // 「？ 使い方」は本体を見せている時だけ（登録の画面・読み込み中・断られた時には出さない）
+  var 開く = 要素('使い方を開く');
+  if (開く) {
+    開く.hidden = 見せる !== '本体';
+    if (見せる !== '本体' && 使い方.開いている) 使い方を閉じる();
+  }
 }
 
 /** 画面の上の知らせの帯。文に null を渡すと消す。ボタン = { 名前, 押したら } */
@@ -157,6 +163,166 @@ function 知らせる(文, ボタン) {
     帯.appendChild(b);
   }
   帯.hidden = false;
+}
+
+// ── 「？ 使い方」（2026-11-24。文言は help.js の 使い方の文・形は見本 2026-11-19）────────────
+// 説明は操作する画面と重ねない（2026-11-19 矢作さん）。広い画面は右に並べて画面を縮め、狭い画面（スマホ）は下半分に出して
+// 「小さくする」で帯にできる。説明の中の緑のボタンを押すと、画面の本物のボタンが光る。
+
+var 横に並べる幅 = 900;   // これより狭い画面は下半分に出す
+var 使い方 = { 画面: '', ページ: '', 開いている: false, 小さい: false, 一言の時計: 0, 光の時計: 0 };
+
+/** 画面 = '代表' / '職員'。ページはタブを選んだ時に 使い方のページ() で渡す */
+function 使い方を用意する(画面) {
+  使い方.画面 = 画面;
+  要素('使い方を開く').addEventListener('click', function () {
+    if (使い方.開いている && !使い方.小さい) 使い方を閉じる(); else 使い方を開く();
+  });
+  要素('使い方を閉じる').addEventListener('click', 使い方を閉じる);
+  要素('使い方を小さく').addEventListener('click', function () { 使い方.小さい = !使い方.小さい; 使い方の置き方(); });
+  if (typeof window.addEventListener === 'function') window.addEventListener('resize', 使い方の置き方);
+}
+
+/** タブを変えた時。開いていれば、そのページの説明に描き直す */
+function 使い方のページ(名) {
+  使い方.ページ = 名;
+  if (使い方.開いている) 使い方を描く();
+}
+
+function 使い方を開く() {
+  使い方.開いている = true;
+  使い方.小さい = false;
+  使い方を描く();
+  使い方の置き方();
+}
+
+function 使い方を閉じる() {
+  使い方.開いている = false;
+  使い方の置き方();
+}
+
+function 横に並べるか() { return (window.innerWidth || 横に並べる幅) >= 横に並べる幅; }
+
+/** 開く・閉じる・小さくする・画面の幅が変わった時に、説明の置き方と、本体の縮め方をそろえる */
+function 使い方の置き方() {
+  var 面 = 要素('使い方'), 開く = 要素('使い方を開く'), 小 = 要素('使い方を小さく');
+  if (!面) return;
+  var 横 = 横に並べるか(), 開 = 使い方.開いている, 小さい = 開 && !横 && 使い方.小さい;
+  面.hidden = !開;
+  面.className = 'help ' + (横 ? 'side' : 'sheet') + (小さい ? ' mini' : '');
+  document.body.classList.toggle('help-side', 開 && 横);
+  document.body.classList.toggle('help-sheet', 開 && !横 && !小さい);
+  document.body.classList.toggle('help-mini', 小さい);
+  開く.setAttribute('aria-expanded', String(開 && !小さい));
+  小.hidden = 横;
+  小.textContent = 小さい ? '⌃' : '⌄';
+  小.setAttribute('aria-label', 小さい ? '大きくする' : '小さくする');
+}
+
+/** 「[認める] を押す」の [ ] を、画面と同じ緑のボタンにする。押すと画面の本物のボタンが光る */
+function ボタン入りの文(タグ, 印, 文) {
+  var 箱 = 作る(タグ, 印 ? { class: 印 } : {});
+  文.split(/(\[[^\]]+\])/).forEach(function (片) {
+    if (!片) return;
+    if (片.charAt(0) !== '[') { 箱.appendChild(document.createTextNode(片)); return; }
+    var 名 = 片.slice(1, -1);
+    var b = 作る('button', { type: 'button', class: 'kbtn', text: 名, title: '画面のこのボタンを光らせる' });
+    b.addEventListener('click', function () { ボタンを光らせる(名); });
+    箱.appendChild(b);
+  });
+  return 箱;
+}
+
+/** やること1行 → 押す順の流れ → 迷いやすい所 → どのページでも同じこと（閉じておく） */
+function 使い方を描く() {
+  var 画 = 使い方の文[使い方.画面], 頁 = 画 && 画.ページ[使い方.ページ];
+  var 中 = 要素('使い方の中身');
+  中.textContent = '';
+  要素('使い方の知らせ').hidden = true;
+  if (!頁) { 要素('使い方の題').textContent = '使い方'; return; }
+  要素('使い方の題').textContent = '「' + 頁.題 + '」の使い方';
+
+  var 上 = 作る('div', { class: 'help-lead' }, [作る('p', { class: 'lead', text: 頁.やること })]);
+  if (頁.補足) 上.appendChild(作る('p', { class: 'muted small', text: 頁.補足 }));
+  中.appendChild(上);
+
+  if (頁.手順.length) {
+    var 順 = 作る('ol', { class: 'help-steps' });
+    頁.手順.forEach(function (s, i) {
+      var 文 = 作る('div', { class: 'st' }, [ボタン入りの文('p', 'do', s.する)]);
+      if (s.結果) 文.appendChild(ボタン入りの文('p', 'res', s.結果));
+      if (s.注意) 文.appendChild(ボタン入りの文('p', 'hint', s.注意));
+      順.appendChild(作る('li', {}, [作る('span', { class: 'no', text: String(i + 1) }), 文]));
+    });
+    中.appendChild(順);
+  }
+
+  if (頁.迷い.length) {
+    var 箱 = 作る('div', { class: 'faq' });
+    頁.迷い.forEach(function (q) {
+      var 答え = 作る('div', { class: 'ans' });
+      q[1].forEach(function (t) { 答え.appendChild(ボタン入りの文('p', '', t)); });
+      箱.appendChild(作る('details', {}, [作る('summary', { text: q[0] }), 答え]));
+    });
+    中.appendChild(作る('div', { class: 'faq-box' }, [作る('p', { class: 'faq-title', text: '迷いやすい所' }), 箱]));
+  }
+
+  var 共 = 作る('div', { class: 'in' });
+  画.共通.forEach(function (m) {
+    var 塊 = 作る('div', { class: 'blk' }, [作る('p', { class: 'bh', text: m.見出し })]);
+    m.文.forEach(function (t) { 塊.appendChild(ボタン入りの文('p', 'bt', t)); });
+    if (m.記号) {
+      塊.appendChild(作る('p', { class: 'legend' }, m.記号.map(function (k) {
+        return 作る('span', { class: 'key' }, [作る('b', { text: k[0] }), k[1]]);
+      })));
+    }
+    共.appendChild(塊);
+  });
+  中.appendChild(作る('details', { class: 'common' }, [作る('summary', { text: 'どのページでも同じこと' }), 共]));
+}
+
+/**
+ * 説明の [名前] に当たる、いま画面に見えている本物のボタン。id が名前と同じボタン（出勤・退勤・日報を送る など）を先に見て、
+ * 無ければ、開いているページと上の知らせの中から、文字が名前と同じボタンを探す。見えていなければ null
+ */
+function 画面のボタンを探す(名) {
+  var 見える = function (el) { return typeof el.getClientRects !== 'function' || el.getClientRects().length > 0; };
+  var ボタンか = function (el) { return !!el && String(el.tagName).toLowerCase() === 'button'; };
+  var 同じid = 要素(名);
+  if (ボタンか(同じid)) return 見える(同じid) ? 同じid : null;
+  var 場所 = ['面-' + 使い方.ページ, '待ちの知らせ', '知らせ'].map(要素).filter(function (el) { return el && !el.hidden; });
+  for (var i = 0; i < 場所.length; i++) {
+    var 候補 = Array.prototype.slice.call(場所[i].querySelectorAll('button'));
+    for (var j = 0; j < 候補.length; j++) {
+      if (String(候補[j].textContent).trim() === 名 && 見える(候補[j])) return 候補[j];
+    }
+  }
+  return null;
+}
+
+function ボタンを光らせる(名) {
+  var 画 = 使い方の文[使い方.画面] || {}, 頁 = (画.ページ || {})[使い方.ページ] || {};
+  var b = 画面のボタンを探す(名);
+  if (!b) {
+    var 訳 = (頁.出ていない時 || {})[名] || (画.出ていない時 || {})[名] || 'いまの画面には出ていません';
+    var 知 = 要素('使い方の知らせ');
+    知.textContent = '「' + 名 + '」は' + 訳 + '。';
+    知.hidden = false;
+    clearTimeout(使い方.一言の時計);
+    使い方.一言の時計 = setTimeout(function () { 知.hidden = true; }, 6000);
+    return;
+  }
+  b.classList.toggle('pointing', false);
+  void b.offsetWidth;   // 続けて押しても、光り方を最初からやり直す
+  b.classList.toggle('pointing', true);
+  if (typeof b.scrollIntoView === 'function') {
+    var 減らす = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    // 下半分に説明がある時は、ボタンを画面の上の方に出す（説明に隠れない）。横は見えていない時だけ動かす
+    //（表を横に動かしすぎると、日付の列が切れて、どの日のボタンか分からなくなる）
+    b.scrollIntoView({ block: 横に並べるか() ? 'center' : 'start', inline: 'nearest', behavior: 減らす ? 'auto' : 'smooth' });
+  }
+  clearTimeout(使い方.光の時計);
+  使い方.光の時計 = setTimeout(function () { b.classList.toggle('pointing', false); }, 3000);
 }
 
 // ── 時刻の表示（サーバーは「2026-10-11 09:05:12」の形で返す）──────────
@@ -265,6 +431,15 @@ function 端末名の見当() {
   if (/iPad/.test(ua)) return 'iPad';
   if (/Android/.test(ua)) return 'Android';
   return 'パソコン';
+}
+
+/**
+ * スマホか（iPad などのタブレットは入れない）。代表の画面はパソコン用で、代表のスマホは職員と同じ画面（2026-11-19 矢作さん）。
+ * スマホで代表の画面を開いたら職員の画面へ案内し、職員の画面の「代表の画面へ」はスマホでは出さない
+ */
+function スマホか() {
+  var ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
+  return /iPhone|iPod/.test(ua) || (/Android/.test(ua) && /Mobile/.test(ua));
 }
 
 /**
